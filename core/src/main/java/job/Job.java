@@ -76,7 +76,7 @@ public class Job {
     }
 
 
-    public static abstract class AbstractArtifact<T extends AbstractArtifact<T>> implements Dependency {
+    public static abstract class DependencyImpl<T extends DependencyImpl<T>> implements Dependency {
         protected final Project.Id id;
 
         @Override
@@ -91,71 +91,13 @@ public class Job {
             return dependencies;
         }
 
-        AbstractArtifact(Project.Id id, Set<Dependency> dependencies) {
+        DependencyImpl(Project.Id id, Set<Dependency> dependencies) {
             this.id = id;
             this.dependencies.addAll(dependencies);
         }
     }
 
-    public static abstract class AbstractArtifactWithPath<T extends AbstractArtifact<T>> extends AbstractArtifact<T>
-            implements Dependency.WithPath {
-
-        AbstractArtifactWithPath(Project.Id id, Set<Dependency> dependencies) {
-            super(id, dependencies);
-            if (id.path != null && !Files.exists(id.path())) {
-                System.err.println("The path does not exist: " + id.path());
-
-            }
-        }
-    }
-
-    // backend_ffi_opencl  backend_ffi_opencl        ffi-opencl                 opencl     <projectRoot>/backends/ffi/opencl
-    // core                core                      core                       core       <projectRoot>/core
-    // mac                 mac                       mac                        mac        null
-    // backend_ffi         backend_ffi               ffi                        ffi        <projectRoot>/backends/ffi
-    record NameAndPath(String hyphenatedName, String shortHyphenatedName, String name, Path path) {
-
-
-        static NameAndPath of(String hyphenatedName, Path base, String[] names) {
-            Path realPossiblyPuralizedPath = null;
-            if (base.resolve(names[0]) instanceof Path path && Files.isDirectory(path)) {
-                realPossiblyPuralizedPath = path;
-            } else if (base.resolve(names[0] + "s") instanceof Path path && Files.isDirectory(path)) {
-                realPossiblyPuralizedPath = path;
-            }
-            if (realPossiblyPuralizedPath == null || names.length == 1) {
-                    /* not a dir just a shortHyphenatedName or the shortHyphenatedName is a simplename (no hyphens)
-                                               hyphenated                 shortHyphernated       path                           shortHyphenatedName
-                        core ->                core                       core                   <root>/core                    core
-                        mac  ->                mac                        mac                    null                           mac
-                     */
-                return new NameAndPath(hyphenatedName, hyphenatedName, hyphenatedName, realPossiblyPuralizedPath);
-            } else {
-                    /* we have one or more names
-                                               hyphenated                 shortHyphernated       path                           shortHyphenatedName
-                        backends_ffi_opencl -> backend_ffi_opencl             ffi-opencl         <root>/backend(s)_ffi_opencl   opencl
-
-                    */
-                var tailNames = Arrays.copyOfRange(names, 1, names.length); // [] -> [....]
-
-                var expectedPath = realPossiblyPuralizedPath.resolve(String.join("/", tailNames));
-                if (!Files.isDirectory(expectedPath)) {
-                    throw new IllegalArgumentException("The path does not exist: " + expectedPath);
-                } else {
-                    if (tailNames.length == 1) {
-                        return new NameAndPath(hyphenatedName, tailNames[0], tailNames[0], expectedPath);
-                    } else {
-                        var midNames = Arrays.copyOfRange(tailNames, 0, tailNames.length);
-                        var hyphenatedMidName = String.join("-", midNames);
-                        return new NameAndPath(hyphenatedName, hyphenatedMidName, tailNames[tailNames.length - 1], expectedPath);
-                    }
-                }
-            }
-        }
-    }
-
     public static class Project {
-
         public record Id(Project project, String fullHyphenatedName, String shortHyphenatedName, String version,
                          Path path) {
             String str() {
@@ -163,21 +105,57 @@ public class Job {
             }
         }
 
-        static Id id(Project project, String hyphenatedName) {
+        static Id id(Project project, String fullHyphenatedName) {
             var version = "1.0";
-            if (hyphenatedName == null || hyphenatedName.length() == 0) {
+            if (fullHyphenatedName == null || fullHyphenatedName.isEmpty()) {
                 throw new IllegalArgumentException("fullHyphenatedName cannot be null or empty yet");
             }
-            int lastIndex = hyphenatedName.lastIndexOf('-');
-            String[] splitString;
-            if (Pattern.matches("\\d+.\\d+", hyphenatedName.substring(lastIndex + 1))) {
-                version = hyphenatedName.substring(lastIndex + 1);
-                splitString = hyphenatedName.substring(0, lastIndex).split("-");
+            int lastIndex = fullHyphenatedName.lastIndexOf('-');
+            String[] names;
+            if (Pattern.matches("\\d+.\\d+", fullHyphenatedName.substring(lastIndex + 1))) {
+                version = fullHyphenatedName.substring(lastIndex + 1);
+                names = fullHyphenatedName.substring(0, lastIndex).split("-");
             } else {
-                splitString = hyphenatedName.split("-");
+                names = fullHyphenatedName.split("-");
             }
-            NameAndPath nameAndPath = NameAndPath.of(hyphenatedName, project.rootPath, splitString);
-            return new Id(project, hyphenatedName, nameAndPath.shortHyphenatedName, version, nameAndPath.path);
+
+            Path realPossiblyPuralizedPath = null;
+            if (project.rootPath().resolve(names[0]) instanceof Path path && Files.isDirectory(path)) {
+                realPossiblyPuralizedPath = path;
+            } else if (project.rootPath.resolve(names[0] + "s") instanceof Path path && Files.isDirectory(path)) {
+                realPossiblyPuralizedPath = path;
+            }
+            Id id = null;
+            if (realPossiblyPuralizedPath == null || names.length == 1) {
+                    /* not a dir just a shortHyphenatedName or the shortHyphenatedName is a simplename (no hyphens)
+                                               hyphenated                 shortHyphernated       path
+                        core ->                core                       core                   <root>/core
+                        mac  ->                mac                        mac                    null
+                     */
+                var shortHyphenatedName = fullHyphenatedName;
+                id = new Id(project, fullHyphenatedName, shortHyphenatedName, version, realPossiblyPuralizedPath);
+            } else {
+                    /* we have one or more names
+                                               hyphenated                 shortHyphernated       path
+                        backends_ffi_opencl -> backend_ffi_opencl             ffi-opencl         <root>/backend(s)_ffi_opencl
+
+                    */
+                var tailNames = Arrays.copyOfRange(names, 1, names.length); // [] -> [....]
+                var expectedPath = realPossiblyPuralizedPath.resolve(String.join("/", tailNames));
+                if (!Files.isDirectory(expectedPath)) {
+                    throw new IllegalArgumentException("The base path existed but no sub path does not exist: " + expectedPath);
+                } else {
+                    if (tailNames.length == 1) {
+                        var shortHyphenatedName = tailNames[0];
+                        id = new Id(project,fullHyphenatedName,  shortHyphenatedName, version,expectedPath);
+                    } else {
+                        var midNames = Arrays.copyOfRange(tailNames, 0, tailNames.length);
+                        var shortHyphenatedName = String.join("-", midNames);
+                        id = new Id(project,fullHyphenatedName,  shortHyphenatedName, version,expectedPath);
+                    }
+                }
+            }
+            return id;
         }
 
         public Id id(String id) {
@@ -223,7 +201,7 @@ public class Job {
 
             static Set<Dependency> clean(Set<Dependency> jars) {
                 var ordered = processOrder(jars);
-                ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(Dependency.Buildable::build);
+                ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(Dependency.Buildable::clean);
                 return ordered;
             }
 
@@ -276,7 +254,6 @@ public class Job {
 
         public void rmdir(Path... paths) {
             for (Path path : paths) {
-                //  System.out.println("rm -rf "+path.getFileName().toString());
                 if (Files.exists(path)) {
                     try (var files = Files.walk(path)) {
                         files.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
@@ -290,8 +267,6 @@ public class Job {
         public void clean(Path... paths) {
             for (Path path : paths) {
                 if (Files.exists(path)) {
-                    // System.out.println("rm -rf "+path.getFileName().toString());
-                    // System.out.println("mkdir -p "+path.getFileName().toString());
                     try (var files = Files.walk(path)) {
                         files.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
                         mkdir(path);
@@ -427,11 +402,11 @@ public class Job {
     }
 
 
-    public static class Jar extends AbstractArtifactWithPath<Jar> implements Dependency.Buildable {
+    public static class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, Dependency.WithPath  {
         public interface JavacProgress extends Progress {
 
             default void javacCommandLine(Dependency a, List<String> opts, List<JavaSource> sources) {
-                accept(a, "javac " + String.join(" ", opts) + " " + String.join(" ", sources.stream().map(JavaSource::getName).collect(Collectors.toList())));
+                accept(a, "javac " + a.id().str());   //String.join(" ", opts) + " " + String.join(" ", sources.stream().map(JavaSource::getName).collect(Collectors.toList())));
             }
 
             default void javacInfo(Dependency a, String s) {
@@ -464,7 +439,7 @@ public class Job {
             }
 
             default void javacCreatedClass(Dependency a, String s) {
-                accept(a, "JAVAC_CREATED_CLASS :" + s);
+               // accept(a, "JAVAC_CREATED_CLASS :" + s);
             }
 
             static JavacProgress adapt(Project.Id id) {
@@ -523,7 +498,9 @@ public class Job {
         private Jar(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
             super(id, dependencies);
             this.exclude = exclude;
-
+            if (id.path != null && !Files.exists(id.path())) {
+                System.err.println("The path does not exist: " + id.path());
+            }
             if (!Files.exists(javaSourcePath())) {
                 var jsp = javaSourcePath();
                 System.out.println("Failed to find java source " + jsp + " path for " + id.shortHyphenatedName());
@@ -828,13 +805,13 @@ public class Job {
     }
 
 
-    public static class CMake extends AbstractArtifactWithPath<CMake> implements Dependency.Buildable {
+    public static class CMake extends DependencyImpl<CMake> implements Dependency.Buildable,Dependency.WithPath  {
 
 
         public interface CMakeProgress extends Progress {
 
             default void cmakeProgress(Dependency a, String s) {
-                accept(a, "CMAKE :" + s);
+             //   accept(a, "CMAKE :" + s);
             }
 
             default void cmakeInfo(Dependency a, String s) {
@@ -889,7 +866,7 @@ public class Job {
                     cmakeProgres.cmakeError(this, "ERR " + String.join(" ", opts));
                     throw new RuntimeException("CMake failed");
                 }
-                cmakeProgres.cmakeInfo(this, "Done " + String.join(" ", opts));
+               // cmakeProgres.cmakeInfo(this, "Done " + String.join(" ", opts));
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
@@ -955,6 +932,9 @@ public class Job {
 
         protected CMake(Project.Id gsn, Path cmakeSourceDir, Set<Dependency> dependencies) {
             super(gsn, dependencies);
+            if (id.path != null && !Files.exists(id.path())) {
+                System.err.println("The path does not exist: " + id.path());
+            }
             this.cmakeSourceDir = cmakeSourceDir;
             this.cmakeBuildDir = cmakeSourceDir.resolve("build");
             this.CMakeLists_txt = cmakeSourceDir.resolve("CMakeLists.txt");
@@ -984,7 +964,7 @@ public class Job {
         public interface JExtractProgress extends Progress {
 
             default void jextractProgress(Dependency a, String s) {
-                accept(a, "JEXTRACT :" + s);
+               //accept(a, "JEXTRACT :" + s);
             }
 
             default void jextractInfo(Dependency a, String s) {
@@ -1085,7 +1065,7 @@ public class Job {
                         "--library", ":" + library
                 )));
                 opts.addAll(List.of(
-                        "--header-class-shortHyphenatedName", id().shortHyphenatedName() + "_h",
+                        "--header-class-name", id().shortHyphenatedName() + "_h",
                         spec.header().toString()
                 ));
                 if (spec instanceof Mac mac) {
@@ -1245,7 +1225,7 @@ public class Job {
         }
     }
 
-    public static class Mac extends Job.AbstractArtifact<Mac> implements Job.Dependency.Optional {
+    public static class Mac extends DependencyImpl<Mac> implements Job.Dependency.Optional {
         final boolean available;
 
         public Mac(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
@@ -1259,7 +1239,7 @@ public class Job {
         }
     }
 
-    public static class Linux extends Job.AbstractArtifact<Linux> implements Job.Dependency.Optional {
+    public static class Linux extends DependencyImpl<Linux> implements Job.Dependency.Optional {
         final boolean available;
 
         public Linux(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
