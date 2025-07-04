@@ -1,4 +1,5 @@
-rm -rf bootstrap.classes bootstrap.jar
-mkdir bootstrap.classes
-javac -d bootstrap.classes --source-path core/src/main/java core/src/main/java/job/Job.java
-jar cf bootstrap.jar -C bootstrap.classes job
+rm -rf build
+javac -d build/bootstrap.classes --source-path core/src/main/java core/src/main/java/job/Job.java
+jar cf bootstrap.jar -C build/bootstrap.classes job
+java -cp bootstrap.jar bld.java bld 
+rm -rf build/bootstrap.classes boottrap.jar

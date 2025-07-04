@@ -102,37 +102,82 @@ public class Job {
 
         AbstractArtifactWithPath(Project.Id id, Set<Dependency> dependencies) {
             super(id, dependencies);
-            if (!Files.exists(id.path())) {
+            if (id.path != null && !Files.exists(id.path())) {
                 System.err.println("The path does not exist: " + id.path());
 
             }
         }
     }
 
+    // backend_ffi_opencl  backend_ffi_opencl        ffi-opencl                 opencl     <projectRoot>/backends/ffi/opencl
+    // core                core                      core                       core       <projectRoot>/core
+    // mac                 mac                       mac                        mac        null
+    // backend_ffi         backend_ffi               ffi                        ffi        <projectRoot>/backends/ffi
+    record NameAndPath(String hyphenatedName, String shortHyphenatedName, String name, Path path) {
+
+
+        static NameAndPath of(String hyphenatedName, Path base, String[] names) {
+            Path realPossiblyPuralizedPath = null;
+            if (base.resolve(names[0]) instanceof Path path && Files.isDirectory(path)) {
+                realPossiblyPuralizedPath = path;
+            } else if (base.resolve(names[0] + "s") instanceof Path path && Files.isDirectory(path)) {
+                realPossiblyPuralizedPath = path;
+            }
+            if (realPossiblyPuralizedPath == null || names.length == 1) {
+                    /* not a dir just a shortHyphenatedName or the shortHyphenatedName is a simplename (no hyphens)
+                                               hyphenated                 shortHyphernated       path                           shortHyphenatedName
+                        core ->                core                       core                   <root>/core                    core
+                        mac  ->                mac                        mac                    null                           mac
+                     */
+                return new NameAndPath(hyphenatedName, hyphenatedName, hyphenatedName, realPossiblyPuralizedPath);
+            } else {
+                    /* we have one or more names
+                                               hyphenated                 shortHyphernated       path                           shortHyphenatedName
+                        backends_ffi_opencl -> backend_ffi_opencl             ffi-opencl         <root>/backend(s)_ffi_opencl   opencl
+
+                    */
+                var tailNames = Arrays.copyOfRange(names, 1, names.length); // [] -> [....]
+
+                var expectedPath = realPossiblyPuralizedPath.resolve(String.join("/", tailNames));
+                if (!Files.isDirectory(expectedPath)) {
+                    throw new IllegalArgumentException("The path does not exist: " + expectedPath);
+                } else {
+                    if (tailNames.length == 1) {
+                        return new NameAndPath(hyphenatedName, tailNames[0], tailNames[0], expectedPath);
+                    } else {
+                        var midNames = Arrays.copyOfRange(tailNames, 0, tailNames.length);
+                        var hyphenatedMidName = String.join("-", midNames);
+                        return new NameAndPath(hyphenatedName, hyphenatedMidName, tailNames[tailNames.length - 1], expectedPath);
+                    }
+                }
+            }
+        }
+    }
+
     public static class Project {
 
-        public record Id(Project project, String projectName, String hyphenatedName, String version, Path path,
-                         String name) {
+        public record Id(Project project, String fullHyphenatedName, String shortHyphenatedName, String version,
+                         Path path) {
+            String str() {
+                return project.name() + " " + fullHyphenatedName + " " + shortHyphenatedName + " " + version + " " + (path == null ? "null" : path);
+            }
         }
 
-        private static Id id(Project project, String hyphenatedName) {
-            int lastIndex = hyphenatedName.lastIndexOf('-');
-            var version = hyphenatedName.substring(lastIndex + 1);
-            String[] splitString = hyphenatedName.substring(0, lastIndex).split("-");
-            var runName = "";
-            var dirName = "";
-            if (splitString.length == 3) {
-                runName = splitString[1] + "-" + splitString[2];
-                dirName = splitString[0] + "s/" + splitString[1] + "/" + splitString[2];
-            } else if (splitString.length == 2) {
-                runName = splitString[1];
-                dirName = splitString[0] + "s/" + splitString[1];
-            } else if (splitString.length == 1) {
-                runName = splitString[0];
-                dirName = splitString[0];
+        static Id id(Project project, String hyphenatedName) {
+            var version = "1.0";
+            if (hyphenatedName == null || hyphenatedName.length() == 0) {
+                throw new IllegalArgumentException("fullHyphenatedName cannot be null or empty yet");
             }
-            var id = new Id(project, project.name(), hyphenatedName, version, project.rootPath().resolve(dirName), runName);
-            return id;
+            int lastIndex = hyphenatedName.lastIndexOf('-');
+            String[] splitString;
+            if (Pattern.matches("\\d+.\\d+", hyphenatedName.substring(lastIndex + 1))) {
+                version = hyphenatedName.substring(lastIndex + 1);
+                splitString = hyphenatedName.substring(0, lastIndex).split("-");
+            } else {
+                splitString = hyphenatedName.split("-");
+            }
+            NameAndPath nameAndPath = NameAndPath.of(hyphenatedName, project.rootPath, splitString);
+            return new Id(project, hyphenatedName, nameAndPath.shortHyphenatedName, version, nameAndPath.path);
         }
 
         public Id id(String id) {
@@ -217,11 +262,11 @@ public class Job {
         }
 
         public Project(Path root) {
-            this(root, (a, s) -> System.out.println(a.id().project().name() + ":" + a.id().name() + ":" + s));
+            this(root, (a, s) -> System.out.println(a.id().project().name() + ":" + a.id().shortHyphenatedName() + ":" + s));
         }
 
         public Dependency add(Dependency dependency) {
-            artifacts.put(dependency.id().hyphenatedName, dependency);
+            artifacts.put(dependency.id().fullHyphenatedName, dependency);
             return dependency;
         }
 
@@ -364,7 +409,7 @@ public class Job {
                         case "run" -> {
                             if (action.get() instanceof String backendName && !action.isEmpty() && getArtifact("backend-" + backendName + "-1.0") instanceof Jar backend) {
                                 if (action.get() instanceof String runnableName && getArtifact("example-" + runnableName + "-1.0") instanceof Dependency.ExecutableJar runnable) {
-                                    runnable.run(runnable.id().name() + ".Main", build(runnable, backend), args);
+                                    runnable.run(runnable.id().shortHyphenatedName() + ".Main", build(runnable, backend), args);
                                 } else {
                                     System.out.println("Failed to find runnable ");
                                 }
@@ -481,7 +526,7 @@ public class Job {
 
             if (!Files.exists(javaSourcePath())) {
                 var jsp = javaSourcePath();
-                System.out.println("Failed to find java source " + jsp + " path for " + id.name());
+                System.out.println("Failed to find java source " + jsp + " path for " + id.shortHyphenatedName());
             }
             id.project.add(this);
         }
@@ -521,7 +566,7 @@ public class Job {
         }
 
         public Path jarFile() {
-            return id().project().buildPath().resolve(id().hyphenatedName() + ".jar");
+            return id().project().buildPath().resolve(id().fullHyphenatedName() + ".jar");
         }
 
         @Override
@@ -659,7 +704,7 @@ public class Job {
         }
 
         private Path classesDir() {
-            return id().project().buildPath().resolve(id().hyphenatedName() + ".classes");
+            return id().project().buildPath().resolve(id().fullHyphenatedName() + ".classes");
         }
 
         private String classesDirName() {
@@ -756,10 +801,10 @@ public class Job {
             JavaProgress javaProgress = JavaProgress.adapt(id());
             List<String> opts = new ArrayList<>();
             opts.addAll(List.of(
-                    "/Users/grfrost/github/babylon-grfrost-fork/build/macosx-aarch64-server-release/jdk/bin/java",
+                    "java",
                     "--enable-preview",
                     "--enable-native-access=ALL-UNNAMED"));
-            if (id().name().equals("nbody")) {
+            if (id().shortHyphenatedName().equals("nbody")) {
                 opts.addAll(List.of(
                         "-XstartOnFirstThread"
                 ));
@@ -933,7 +978,7 @@ public class Job {
     public static class JExtract extends Jar {
         @Override
         public Path javaSourcePath() {
-            return id.project.confPath.resolve(id().hyphenatedName).resolve("src/main/java");
+            return id.project.confPath.resolve(id().fullHyphenatedName).resolve("src/main/java");
         }
 
         public interface JExtractProgress extends Progress {
@@ -975,10 +1020,35 @@ public class Job {
             List<Path> frameworks();
         }
 
-        record Mac(Path macSdkSysLibFrameWorks, Path macSysLibFrameWorks, Path header,
-                   List<Path> frameworks) implements ExtractSpec {
-            static Mac of(CMakeInfo cMakeInfo, String... frameworks) {
+        public record Mac(Path macSdkSysLibFrameWorks, Path macSysLibFrameWorks, Path header,
+                          List<Path> frameworks) implements ExtractSpec {
+            public static Mac of(CMakeInfo cMakeInfo, String... frameworks) {
                 var value = (String) cMakeInfo.properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES");
+                Path macSdkSysLibFrameWorks = Path.of(value);
+                Path macSysLibFrameWorks = Path.of("/System/Library/Frameworks");
+                var firstName = frameworks[0];
+                return new Mac(
+                        macSdkSysLibFrameWorks,
+                        macSysLibFrameWorks,
+                        macSdkSysLibFrameWorks.resolve(firstName.toUpperCase() + ".framework/Headers/" + firstName + ".h"),
+                        Stream.of(frameworks).map(s -> macSysLibFrameWorks.resolve(s + ".framework/" + s)).collect(Collectors.toList())
+                );
+            }
+
+            void writeCompileFlags(Path outputDir) {
+                try {
+                    Path compileFLags = outputDir.resolve("compile_flags.txt");
+                    Files.writeString(compileFLags, "-F" + macSdkSysLibFrameWorks + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+
+        public record Linux(Path macSdkSysLibFrameWorks, Path macSysLibFrameWorks, Path header,
+                            List<Path> frameworks) implements ExtractSpec {
+            public static Mac of(CMakeInfo cMakeInfo, String... frameworks) {
+                var value = (String) cMakeInfo.properties.get("");
                 Path macSdkSysLibFrameWorks = Path.of(value);
                 Path macSysLibFrameWorks = Path.of("/System/Library/Frameworks");
                 var firstName = frameworks[0];
@@ -1007,15 +1077,15 @@ public class Job {
 
                 List<String> opts = new ArrayList<>(List.of());
                 opts.addAll(List.of(
-                        "/Users/grfrost/jextract-22/bin/jextract",
-                        "--target-package", id().name(),
+                        "jextract",
+                        "--target-package", id().shortHyphenatedName(),
                         "--output", javaSourcePath().toString()
                 ));
                 spec.frameworks().forEach(library -> opts.addAll(List.of(
                         "--library", ":" + library
                 )));
                 opts.addAll(List.of(
-                        "--header-class-name", id().name() + "_h",
+                        "--header-class-shortHyphenatedName", id().shortHyphenatedName() + "_h",
                         spec.header().toString()
                 ));
                 if (spec instanceof Mac mac) {
@@ -1072,7 +1142,7 @@ public class Job {
             return new JExtract(id, spec, Set.of(), dependencies);
         }
 
-        static JExtract of(Project.Id id, ExtractSpec spec, Dependency... dependencies) {
+        public static JExtract of(Project.Id id, ExtractSpec spec, Dependency... dependencies) {
             return of(id, spec, Set.of(), Set.of(dependencies));
         }
     }
@@ -1175,35 +1245,48 @@ public class Job {
         }
     }
 
-    public static class Mac extends Job.AbstractArtifact<Mac> implements Job.Dependency.Optional{
-        Mac(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id,  buildDependencies);
+    public static class Mac extends Job.AbstractArtifact<Mac> implements Job.Dependency.Optional {
+        final boolean available;
+
+        public Mac(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, buildDependencies);
+            available = System.getProperty("os.name").toLowerCase().contains("mac");
         }
 
         @Override
         public boolean isAvailable() {
-            return System.getProperty("os.name").toLowerCase().contains("mac");
+            return available;
         }
     }
-    public static class Linux extends Job.AbstractArtifact<Linux> implements Job.Dependency.Optional{
-        Linux(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id,  buildDependencies);
+
+    public static class Linux extends Job.AbstractArtifact<Linux> implements Job.Dependency.Optional {
+        final boolean available;
+
+        public Linux(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, buildDependencies);
+            available = System.getProperty("os.name").toLowerCase().contains("linux");
         }
 
         @Override
         public boolean isAvailable() {
-            return System.getProperty("os.name").toLowerCase().contains("linux");
+            return available;
         }
     }
+
     public static class OpenGL extends Job.CMakeInfo {
 
         final Path glLibrary;
-        OpenGL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id,  "OpenGL", "OPENGL_FOUND",Set.of(
+
+        public OpenGL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, "OpenGL", "OPENGL_FOUND", Set.of(
                     "OPENGL_FOUND",
                     "OPENGL_GLU_FOUND",
                     "OPENGL_gl_LIBRARY",
                     "OPENGL_glu_LIBRARY",
+                    "OPENGL_INCLUDE_DIR",
+                    "OPENGL_LIBRARIES",
+                    "OPENGL_LIBRARY",
+                    "OpenGL_FOUND",
                     "CMAKE_HOST_SYSTEM_NAME",
                     "CMAKE_HOST_SYSTEM_PROCESSOR",
                     "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
@@ -1214,23 +1297,37 @@ public class Job {
 
     }
 
-   public static class OpenCL extends Job.CMakeInfo{
+    public static class OpenCL extends Job.CMakeInfo {
 
 
-        OpenCL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id,  "OpenCL", "OPENCL_FOUND", Set.of(
+        public OpenCL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, "OpenCL", "OPENCL_FOUND", Set.of(
                     "OPENCL_FOUND",
                     "CMAKE_HOST_SYSTEM_NAME",
                     "CMAKE_HOST_SYSTEM_PROCESSOR",
-                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
+                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES",
+                    "OpenCL_FOUND",
+                    "OpenCL_INCLUDE_DIRS",
+                    "OpenCL_LIBRARY",
+                    "OpenCL_VERSION_STRING"
             ), buildDependencies);
 
         }
     }
-  public static   class Cuda extends Job.CMakeInfo{
-        Cuda(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id,  "CUDAToolkit", "CUDATOOLKIT_FOUND",Set.of(
+
+    public static class Cuda extends Job.CMakeInfo {
+        public Cuda(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, "CUDAToolkit", "CUDATOOLKIT_FOUND", Set.of(
                     "CUDATOOLKIT_FOUND",
+                    "CUDA_OpenCL_LIBRARY",
+                    "CUDA_cuFile_LIBRARY",
+                    "CUDA_cuda_driver_LIBRARY",
+                    "CUDA_cudart_LIBRARY",
+                    "CUDAToolkit_BIN_DIR",
+                    "CUDAToolkit_INCLUDE_DIRS",
+                    "CUDAToolkit_NVCC_EXECUTABLE",
+                    "CUDAToolkit_LIBRARY_DIR",
+                    "CUDAToolkit_Version",
                     "CMAKE_HOST_SYSTEM_NAME",
                     "CMAKE_HOST_SYSTEM_PROCESSOR",
                     "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
