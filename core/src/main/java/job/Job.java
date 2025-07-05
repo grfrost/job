@@ -98,25 +98,28 @@ public class Job {
     }
 
     public static class Project {
-        public record Id(Project project, String fullHyphenatedName, String shortHyphenatedName, String version,
+        public record Id(Project project, String fullHyphenatedName, String projectRelativeHyphenatedName, String shortHyphenatedName, String version,
                          Path path) {
             String str() {
-                return project.name() + " " + fullHyphenatedName + " " + shortHyphenatedName + " " + version + " " + (path == null ? "null" : path);
+                return project.name() + " " + fullHyphenatedName + " "+projectRelativeHyphenatedName+" " + shortHyphenatedName + " " + version + " " + (path == null ? "null" : path);
+            }
+            static Id of(Project project, String projectRelativeHyphenatedName, String shortHyphenatedName, String version, Path path) {
+                return new Id(project, project.name()+"-"+projectRelativeHyphenatedName+"-"+version, projectRelativeHyphenatedName, shortHyphenatedName, version, path);
             }
         }
 
-        static Id id(Project project, String fullHyphenatedName) {
+        static Id id(Project project, String projectRelativeHyphenatedName) {
             var version = "1.0";
-            if (fullHyphenatedName == null || fullHyphenatedName.isEmpty()) {
-                throw new IllegalArgumentException("fullHyphenatedName cannot be null or empty yet");
+            if (projectRelativeHyphenatedName == null || projectRelativeHyphenatedName.isEmpty()) {
+                throw new IllegalArgumentException("projectRelativeHyphenatedName cannot be null or empty yet");
             }
-            int lastIndex = fullHyphenatedName.lastIndexOf('-');
+            int lastIndex = projectRelativeHyphenatedName.lastIndexOf('-');
             String[] names;
-            if (Pattern.matches("\\d+.\\d+", fullHyphenatedName.substring(lastIndex + 1))) {
-                version = fullHyphenatedName.substring(lastIndex + 1);
-                names = fullHyphenatedName.substring(0, lastIndex).split("-");
+            if (Pattern.matches("\\d+.\\d+", projectRelativeHyphenatedName.substring(lastIndex + 1))) {
+                version = projectRelativeHyphenatedName.substring(lastIndex + 1);
+                names = projectRelativeHyphenatedName.substring(0, lastIndex).split("-");
             } else {
-                names = fullHyphenatedName.split("-");
+                names = projectRelativeHyphenatedName.split("-");
             }
 
             Path realPossiblyPuralizedPath = null;
@@ -132,8 +135,8 @@ public class Job {
                         core ->                core                       core                   <root>/core
                         mac  ->                mac                        mac                    null
                      */
-                var shortHyphenatedName = fullHyphenatedName;
-                id = new Id(project, fullHyphenatedName, shortHyphenatedName, version, realPossiblyPuralizedPath);
+                var shortHyphenatedName = projectRelativeHyphenatedName;
+                id = Id.of(project, projectRelativeHyphenatedName, shortHyphenatedName, version, realPossiblyPuralizedPath);
             } else {
                     /* we have one or more names
                                                hyphenated                 shortHyphernated       path
@@ -143,15 +146,15 @@ public class Job {
                 var tailNames = Arrays.copyOfRange(names, 1, names.length); // [] -> [....]
                 var expectedPath = realPossiblyPuralizedPath.resolve(String.join("/", tailNames));
                 if (!Files.isDirectory(expectedPath)) {
-                    throw new IllegalArgumentException("The base path existed but no sub path does not exist: " + expectedPath);
+                    throw new IllegalArgumentException("The base path existed but sub path does not exist: " + expectedPath);
                 } else {
                     if (tailNames.length == 1) {
                         var shortHyphenatedName = tailNames[0];
-                        id = new Id(project,fullHyphenatedName,  shortHyphenatedName, version,expectedPath);
+                        id = Id.of(project,projectRelativeHyphenatedName,  shortHyphenatedName, version,expectedPath);
                     } else {
                         var midNames = Arrays.copyOfRange(tailNames, 0, tailNames.length);
                         var shortHyphenatedName = String.join("-", midNames);
-                        id = new Id(project,fullHyphenatedName,  shortHyphenatedName, version,expectedPath);
+                        id = Id.of(project,projectRelativeHyphenatedName,  shortHyphenatedName, version,expectedPath);
                     }
                 }
             }
@@ -382,14 +385,16 @@ public class Job {
                         case "clean" -> clean(action.args);
                         case "bld" -> build(action.args);
                         case "run" -> {
-                            if (action.get() instanceof String backendName && !action.isEmpty() && getArtifact("backend-" + backendName + "-1.0") instanceof Jar backend) {
-                                if (action.get() instanceof String runnableName && getArtifact("example-" + runnableName + "-1.0") instanceof Dependency.ExecutableJar runnable) {
+                            String backendName =action.get();
+                            if ( getArtifact("hat-backend-" + backendName + "-1.0") instanceof Jar backend) {
+                                String runnableName = action.get();
+                                if ( getArtifact("hat-example-" + runnableName + "-1.0") instanceof Dependency.ExecutableJar runnable) {
                                     runnable.run(runnable.id().shortHyphenatedName() + ".Main", build(runnable, backend), args);
                                 } else {
                                     System.out.println("Failed to find runnable ");
                                 }
                             } else {
-                                System.out.println("Failed to find backend !");
+                                System.out.println("Failed to find 'hat-backend-" + backendName + "-1.0'");
                             }
                         }
                         default -> {
@@ -958,7 +963,7 @@ public class Job {
     public static class JExtract extends Jar {
         @Override
         public Path javaSourcePath() {
-            return id.project.confPath.resolve(id().fullHyphenatedName).resolve("src/main/java");
+            return id.path().resolve("src/main/java");
         }
 
         public interface JExtractProgress extends Progress {
