@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -38,9 +37,87 @@ import java.util.stream.Stream;
 
 
 public class Job {
-    @FunctionalInterface
-    public interface Progress extends BiConsumer<Dependency, String> {
-        void accept(Dependency a, String s);
+    public static class Reporter {
+        public final Consumer<String> command = System.out::println;
+        public final Consumer<String> progress = System.out::println;
+        public final Consumer<String> error = System.out::println;
+        public final Consumer<String> info = System.out::println;
+        public final Consumer<String> warning = System.out::println;
+        public final Consumer<String> note = System.out::println;
+        public void command(Dependency dependency, String command) {
+            if (dependency != null) {
+                this.command.accept("# "+dependency.id().projectRelativeHyphenatedName+" command line ");
+            }
+            this.command.accept(command);
+        }
+        public void progress(Dependency dependency, String command) {
+            if (dependency != null) {
+                progress.accept("# " + dependency.id().projectRelativeHyphenatedName + " " + command);
+            }
+        }
+        public void error(Dependency dependency, String command) {
+            if (dependency != null) {
+                error.accept("# "+dependency.id().projectRelativeHyphenatedName+" error ");
+            }
+            error.accept(command);
+        }
+        public void info(Dependency dependency, String command) {
+           // if (dependency != null) {
+           //     info.accept("# "+dependency.id().projectRelativeHyphenatedName+" info ");
+          //  }
+            info.accept(command);
+        }
+        public void note(Dependency dependency, String command) {
+          //  if (dependency != null) {
+            //    note.accept("# "+dependency.id().projectRelativeHyphenatedName+" note ");
+          //  }
+            note.accept(command);
+        }
+        public void warning(Dependency dependency, String command) {
+         //   if (dependency != null) {
+          //      warning.accept("# "+dependency.id().projectRelativeHyphenatedName+" warning ");
+          //  }
+            warning.accept(command);
+        }
+        static Reporter verbose = new  Reporter();
+        public static Reporter commandsAndErrors = new  Reporter(){
+            @Override
+            public void warning(Dependency dependency, String command) {
+
+            }
+            @Override
+            public void info(Dependency dependency, String command) {
+
+            }
+            @Override
+            public void note(Dependency dependency, String command) {
+
+            }
+            @Override
+            public void progress(Dependency dependency, String command) {
+
+            }
+
+        };
+
+        public static Reporter progressAndErrors = new  Reporter(){
+            @Override
+            public void warning(Dependency dependency, String command) {
+
+            }
+            @Override
+            public void info(Dependency dependency, String command) {
+
+            }
+            @Override
+            public void note(Dependency dependency, String command) {
+
+            }
+            @Override
+            public void command(Dependency dependency, String command) {
+
+            }
+        };
     }
 
     public interface Dependency {
@@ -213,7 +290,7 @@ public class Job {
         private final Path rootPath;
         private final Path buildPath;
         private final Path confPath;
-        private final Progress progress;
+
         private final Map<String, Dependency> artifacts = new LinkedHashMap<>();
 
         public String name() {
@@ -231,20 +308,21 @@ public class Job {
         public Path confPath() {
             return confPath;
         }
-
-        public Project(Path root, Progress progress) {
+public final Reporter reporter;
+        public Project(Path root, Reporter reporter) {
             this.rootPath = root;
             if (!Files.exists(root)) {
                 throw new IllegalArgumentException("Root path for project does not exist: " + root);
             }
             this.buildPath = root.resolve("build");
             this.confPath = root.resolve("conf");
-            this.progress = progress;
+            this.reporter = reporter;
+
         }
 
-        public Project(Path root) {
-            this(root, (a, s) -> System.out.println(a.id().project().name() + ":" + a.id().shortHyphenatedName() + ":" + s));
-        }
+
+
+
 
         public Dependency add(Dependency dependency) {
             artifacts.put(dependency.id().fullHyphenatedName, dependency);
@@ -267,12 +345,14 @@ public class Job {
             }
         }
 
-        public void clean(Path... paths) {
+        public void clean(Dependency dependency, Path... paths) {
             for (Path path : paths) {
                 if (Files.exists(path)) {
                     try (var files = Files.walk(path)) {
                         files.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+                        reporter.command(dependency, "rm -rf "+path);
                         mkdir(path);
+                        reporter.command(dependency,"mkdir -p "+path);
                     } catch (Throwable t) {
                         throw new RuntimeException(t);
                     }
@@ -408,95 +488,8 @@ public class Job {
 
 
     public static class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, Dependency.WithPath  {
-        public interface JavacProgress extends Progress {
 
-            default void javacCommandLine(Dependency a, List<String> opts, List<JavaSource> sources) {
-                accept(a, "javac " + a.id().str());   //String.join(" ", opts) + " " + String.join(" ", sources.stream().map(JavaSource::getName).collect(Collectors.toList())));
-            }
 
-            default void javacInfo(Dependency a, String s) {
-                accept(a, "JAVAC : I" + s);
-            }
-
-            default void javacProgress(Dependency a, String s) {
-                accept(a, "JAVAC : " + s);
-            }
-
-            default void javacError(Dependency a, String s) {
-                accept(a, "JAVAC : !!!" + s);
-                throw new RuntimeException(s);
-            }
-
-            default void javacWarning(Dependency a, String s) {
-                accept(a, "JAVAC : W " + s);
-            }
-
-            default void javacClean(Dependency a, Path... paths) {
-                accept(a, "clean " + String.join(" ", Arrays.stream(paths).map(Path::toString).toList()));
-            }
-
-            default void javacNote(Dependency a, String s) {
-                accept(a, "JAVAC :" + s);
-            }
-
-            default void javacVerbose(Dependency a, String s) {
-                accept(a, "JAVAC :" + s);
-            }
-
-            default void javacCreatedClass(Dependency a, String s) {
-               // accept(a, "JAVAC_CREATED_CLASS :" + s);
-            }
-
-            static JavacProgress adapt(Project.Id id) {
-                return (id.project().progress instanceof JavacProgress progress) ? progress : new JavacProgress() {
-                    @Override
-                    public void accept(Dependency a, String s) {
-                        id.project().progress.accept(a, s);
-                    }
-                };
-            }
-
-        }
-
-        public interface JarProgress extends Progress {
-            default void jarProgress(Dependency a, String s) {
-                accept(a, "JAR :" + s);
-            }
-
-            default void jarInfo(Dependency a, String s) {
-                accept(a, "JAR : I" + s);
-            }
-
-            default void jarCommandLine(Dependency a, Path path, List<Path> paths) {
-                accept(a, "jar cvf " + path + " " + String.join(paths.stream().map(Path::toString).collect(Collectors.joining(" "))));
-            }
-
-            default void jarClean(Dependency a, Path... paths) {
-                accept(a, "clean " + String.join(" ", Arrays.stream(paths).map(Path::toString).toList()));
-            }
-
-            default void jarError(Dependency a, String s) {
-                accept(a, "JAR : !!!" + s);
-                throw new RuntimeException(s);
-            }
-
-            default void jarWarning(Dependency a, String s) {
-                accept(a, "JAR : W " + s);
-            }
-
-            default void jarNote(Dependency a, String s) {
-                accept(a, "JAR :" + s);
-            }
-
-            static JarProgress adapt(Project.Id id) {
-                return (id.project.progress instanceof JarProgress progress) ? progress : new JarProgress() {
-                    @Override
-                    public void accept(Dependency a, String s) {
-                        id.project.progress.accept(a, s);
-                    }
-                };
-            }
-        }
 
         final Set<Path> exclude;
 
@@ -559,9 +552,7 @@ public class Job {
 
         @Override
         public boolean clean() {
-            RunnableJar.JavacProgress.adapt(id()).javacClean(this, classesDir(), jarFile());
-            RunnableJar.JarProgress.adapt(id()).jarClean(this, classesDir(), jarFile());
-            id().project().clean(classesDir(), jarFile());
+            id().project().clean(null, classesDir(), jarFile());
             return true;
         }
 
@@ -587,30 +578,34 @@ public class Job {
                     )
             );
 
-            JavacProgress javacProgress = JavacProgress.adapt(id());
+
 
             JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
-            javacProgress.javacClean(this, classesDir());
-            id().project().clean(classesDir());
+
+            id().project().clean(this, classesDir());
 
             if (Files.exists(javaSourcePath())) {
                 try (var files = Files.walk(javaSourcePath())) {
                     var listOfSources = files.filter(p -> Files.isRegularFile(p) && p.toString().endsWith(".java") && !exclude.contains(p)).map(JavaSource::new).toList();
+                    id().project().reporter.command(this, "javac " +
+                            String.join(" ", opts) + " " + String.join(" ",
+                            listOfSources.stream().map(JavaSource::getName).collect(Collectors.toList())));
+                    id().project().reporter.progress(this, "java compiling "+listOfSources.size()+" files");
 
-                    javacProgress.javacCommandLine(this, opts, listOfSources);
                     var diagnosticListener = new DiagnosticListener<JavaFileObject>() {
                         @Override
                         public void report(Diagnostic<? extends JavaFileObject> diagnostic) {
                             if (diagnostic.getKind() == Diagnostic.Kind.ERROR) {
-                                javacProgress.javacError(Jar.this, diagnostic.toString());
+                                id().project().reporter.error(Jar.this, diagnostic.toString());
                             } else if (diagnostic.getKind() == Diagnostic.Kind.WARNING) {
-                                javacProgress.javacWarning(Jar.this, diagnostic.toString());
+                                id().project().reporter.warning(Jar.this, diagnostic.toString());
                             } else if (diagnostic.getKind() == Diagnostic.Kind.MANDATORY_WARNING) {
-                                javacProgress.javacWarning(Jar.this, "!!" + diagnostic.toString());
+                                id().project().reporter.warning(Jar.this, "!!" + diagnostic.toString());
                             } else if (diagnostic.getKind() == Diagnostic.Kind.NOTE) {
-                                javacProgress.javacNote(Jar.this, diagnostic.toString());
+                                id().project().reporter.note(Jar.this, diagnostic.toString());
+                            }else {
+                                id().project().reporter.warning(Jar.this, diagnostic.getKind() + ":" + diagnostic.toString());
                             }
-                            javacProgress.javacProgress(Jar.this, diagnostic.getKind() + ":" + diagnostic.toString());
                         }
                     };
                     ((JavacTask) javac.getTask(
@@ -621,7 +616,7 @@ public class Job {
                             null,
                             listOfSources
                     )).generate().forEach(gc ->
-                            javacProgress.javacCreatedClass(this, gc.getName())
+                            id.project.reporter.note(this, gc.getName())
                     );
 
                     List<Path> dirsToJar = new ArrayList<>(List.of(classesDir()));
@@ -629,13 +624,15 @@ public class Job {
                         dirsToJar.add(javaResourcePath());
                     }
                     var jarStream = new JarOutputStream(Files.newOutputStream(jarFile()));
-                    JarProgress jarProgress = JarProgress.adapt(id());
+
 
                     record RootAndPath(Path root, Path path) {
                     }
                     dirsToJar.forEach(r -> {
                         try {
-                            jarProgress.jarCommandLine(this, jarFile(), dirsToJar);
+                            id().project().reporter.command(this, "jar cvf " + jarFile()+ " " +
+                                    String.join(dirsToJar.stream().map(Path::toString).collect(Collectors.joining(" "))));
+                            id().project().reporter.progress(this, "creating jar " + jarFile());
 
                             Files.walk(r)
                                     .filter(p -> !Files.isDirectory(p))
@@ -716,41 +713,7 @@ public class Job {
     }
 
     public static class RunnableJar extends Jar implements Dependency.ExecutableJar {
-        public interface JavaProgress extends Progress {
-            default void javaProgress(Dependency a, String s) {
-                accept(a, "JAVA :" + s);
-            }
 
-            default void javaInfo(Dependency a, String s) {
-                accept(a, "JAVA : I" + s);
-            }
-
-            default void javaCommandLine(Dependency a, String s) {
-                accept(a, "JAVA : " + s);
-            }
-
-            default void javaError(Dependency a, String s) {
-                accept(a, "JAVA : !!!" + s);
-                throw new RuntimeException(s);
-            }
-
-            default void javaWarning(Dependency a, String s) {
-                accept(a, "JAVA : W " + s);
-            }
-
-            default void javaNote(Dependency a, String s) {
-                accept(a, "JAVA :" + s);
-            }
-
-            static JavaProgress adapt(Project.Id id) {
-                return (id.project().progress instanceof JavaProgress progress) ? progress : new JavaProgress() {
-                    @Override
-                    public void accept(Dependency a, String s) {
-                        id.project().progress.accept(a, s);
-                    }
-                };
-            }
-        }
 
         private RunnableJar(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
             super(id, exclude, dependencies);
@@ -780,10 +743,15 @@ public class Job {
 
         @Override
         public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> args) {
-            JavaProgress javaProgress = JavaProgress.adapt(id());
+
             List<String> opts = new ArrayList<>();
+            String javaExecutablePath = ProcessHandle.current()
+                    .info()
+                    .command()
+                    .orElseThrow();
+            System.out.println("Using Java executable: " + javaExecutablePath);
             opts.addAll(List.of(
-                    "java",
+                    javaExecutablePath,
                     "--enable-preview",
                     "--enable-native-access=ALL-UNNAMED"));
             if (id().shortHyphenatedName().equals("nbody")) {
@@ -798,10 +766,14 @@ public class Job {
                     mainClassName
             ));
             opts.addAll(args);
-            javaProgress.javaCommandLine(this, String.join(" ", opts));
+            id().project().reporter.command(this, String.join(" ", opts));
+            id().project().reporter.progress(this, "running");
             try {
-                var process = new ProcessBuilder().command(opts).redirectOutput(ProcessBuilder.Redirect.INHERIT).start();
+                var process = new ProcessBuilder().directory(id().project().rootPath().toFile()).redirectErrorStream(true).command(opts).start();
                 process.waitFor();
+                if (process.exitValue()!=0) {
+                    System.out.println("Java failed to execute, is a valid java in your path ? " + id().fullHyphenatedName());
+                }
                 return process.exitValue() == 0;
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -813,46 +785,35 @@ public class Job {
     public static class CMake extends DependencyImpl<CMake> implements Dependency.Buildable,Dependency.WithPath  {
 
 
-        public interface CMakeProgress extends Progress {
-
-            default void cmakeProgress(Dependency a, String s) {
-             //   accept(a, "CMAKE :" + s);
+        public static boolean isInPath() {
+            try{
+                var process =new ProcessBuilder().command("cmake", "--version").start();
+                process.getInputStream().transferTo(System.out);
+                process.getErrorStream().transferTo(System.err);
+                process.waitFor();
+                if (process.exitValue() != 0) {
+                    System.out.println("CMake in path but exited with : " + process.exitValue());
+                    return false;
+                } else {
+                    System.out.println("CMake in path ");
+                    return true;
+                }
+            }catch (Exception e){
+               // e.printStackTrace();
+                System.out.println("No Cmake : " );
+                return false;
             }
-
-            default void cmakeInfo(Dependency a, String s) {
-                accept(a, "CMAKE :" + s);
-            }
-
-            default void cmakeError(Dependency a, String s) {
-                accept(a, "CMAKE :!!" + s);
-            }
-
-            default void cmakeCommandLine(Dependency a, String s) {
-                accept(a, "CMAKE :" + s);
-            }
-
-            default void cmakeVerbose(Dependency a, String s) {
-                accept(a, "CMAKE :     " + s);
-            }
-
-            static CMakeProgress adapt(Project.Id id) {
-                return (id.project().progress instanceof CMakeProgress progress) ? progress : new CMakeProgress() {
-                    @Override
-                    public void accept(Dependency a, String s) {
-                        id.project().progress.accept(a, s);
-                    }
-                };
-            }
-
         }
+
 
         public boolean cmake(Consumer<String> lineConsumer, List<String> tailopts) {
             List<String> opts = new ArrayList<>();
             opts.add("cmake");
             opts.addAll(tailopts);
             boolean success;
-            CMakeProgress cmakeProgres = CMakeProgress.adapt(id());
-            cmakeProgres.cmakeCommandLine(this, String.join(" ", opts));
+
+            id.project().reporter.command(this,  String.join(" ", opts) );
+            id.project().reporter.progress(this,  String.join(" ", opts) );
             try {
                 var process = new ProcessBuilder()
                         .command(opts)
@@ -863,12 +824,12 @@ public class Job {
                 new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
                         .forEach(line -> {
                             lineConsumer.accept(line);
-                            cmakeProgres.cmakeProgress(this, line);
+                            id().project().reporter.info(this,  line);
                         });
                 success = (process.exitValue() == 0);
 
                 if (!success) {
-                    cmakeProgres.cmakeError(this, "ERR " + String.join(" ", opts));
+                    id().project().reporter.error(this, String.join(" ", opts));
                     throw new RuntimeException("CMake failed");
                 }
                // cmakeProgres.cmakeInfo(this, "Done " + String.join(" ", opts));
@@ -961,42 +922,32 @@ public class Job {
 
 
     public static class JExtract extends Jar {
+        public static boolean isInPath() {
+            try{
+                var process =new ProcessBuilder().command("jextract", "--version").start();
+                process.getInputStream().transferTo(System.out);
+                process.getErrorStream().transferTo(System.err);
+                process.waitFor();
+                if (process.exitValue() != 0) {
+                    System.out.println("No jextract : " + process.exitValue());
+                    return false;
+                } else {
+                    System.out.println("CMake ok  " );
+                    return true;
+                }
+            }catch (Exception e){
+               // e.printStackTrace();
+                System.out.println("No Jextract  : " );
+                return false;
+            }
+        }
+
         @Override
         public Path javaSourcePath() {
             return id.path().resolve("src/main/java");
         }
 
-        public interface JExtractProgress extends Progress {
 
-            default void jextractProgress(Dependency a, String s) {
-               //accept(a, "JEXTRACT :" + s);
-            }
-
-            default void jextractInfo(Dependency a, String s) {
-                accept(a, "JEXTRACT :" + s);
-            }
-
-            default void jextractCommandLine(Dependency a, String s) {
-                accept(a, "JEXTRACT :" + s);
-            }
-
-            default void jextractVerbose(Dependency a, String s) {
-                accept(a, "JEXTRACT :     " + s);
-            }
-
-            default void jextractError(Dependency a, String s) {
-                accept(a, "JEXTRACT :!!     " + s);
-            }
-
-            static JExtractProgress adapt(Project.Id id) {
-                return (id.project().progress instanceof JExtractProgress progress) ? progress : new JExtractProgress() {
-                    @Override
-                    public void accept(Dependency a, String s) {
-                        id.project().progress.accept(a, s);
-                    }
-                };
-            }
-        }
 
 
         public interface ExtractSpec {
@@ -1063,6 +1014,7 @@ public class Job {
                 List<String> opts = new ArrayList<>(List.of());
                 opts.addAll(List.of(
                         "jextract",
+                      //  "/Users/grfrost/jextract-22/bin/jextract",
                         "--target-package", id().shortHyphenatedName(),
                         "--output", javaSourcePath().toString()
                 ));
@@ -1077,8 +1029,9 @@ public class Job {
                     mac.writeCompileFlags(id().project().rootPath);
                 }
                 boolean success;
-                JExtractProgress jExtractProgress = JExtractProgress.adapt(id());
-                jExtractProgress.jextractCommandLine(this, String.join(" ", opts));
+
+                id().project().reporter.command(this, String.join(" ", opts));
+                id().project().reporter.progress(this, String.join(" ", opts));
                 try {
                     var process = new ProcessBuilder()
                             .command(opts)
@@ -1086,10 +1039,10 @@ public class Job {
                             .start();
                     process.waitFor();
                     new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
-                            .forEach(s -> jExtractProgress.jextractProgress(this, s));
+                            .forEach(s -> id().project.reporter.warning(this, s));
                     success = (process.exitValue() == 0);
                     if (!success) {
-                        jExtractProgress.jextractError(this, "error " + process.exitValue());
+                        id().project.reporter.error(this, "error " + process.exitValue());
                     }
                 } catch (Exception e) {
                     throw new IllegalStateException(e);
@@ -1276,7 +1229,6 @@ public class Job {
                     "CMAKE_HOST_SYSTEM_PROCESSOR",
                     "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
             ), buildDependencies);
-            System.out.println("HERE");
             glLibrary = asPath("OpenGL_glu_Library");
         }
 
