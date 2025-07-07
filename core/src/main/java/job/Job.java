@@ -253,7 +253,7 @@ public class Job {
                 });
             }
 
-            static Set<Dependency> processOrder(Set<Dependency> jars) {
+            public static Set<Dependency> processOrder(Set<Dependency> jars) {
                 Map<Dependency, Set<Dependency>> map = new LinkedHashMap<>();
                 Set<Dependency> ordered = new LinkedHashSet<>();
                 jars.forEach(jar -> recurse(map, jar));
@@ -325,12 +325,12 @@ public final Reporter reporter;
 
 
         public Dependency add(Dependency dependency) {
-            artifacts.put(dependency.id().fullHyphenatedName, dependency);
+            artifacts.put(dependency.id().shortHyphenatedName, dependency);
             return dependency;
         }
 
-        public Dependency getArtifact(String dependency) {
-            return artifacts.get(dependency);
+        public Dependency get(String shortHyphenatedName) {
+            return artifacts.get(shortHyphenatedName);
         }
 
         public void rmdir(Path... paths) {
@@ -380,7 +380,7 @@ public final Reporter reporter;
             if (names.isEmpty()) {
                 rmdir(buildPath());
             } else {
-                clean(names.stream().map(this::getArtifact).collect(Collectors.toSet()));
+                clean(names.stream().map(this::get).collect(Collectors.toSet()));
             }
         }
 
@@ -396,101 +396,13 @@ public final Reporter reporter;
             if (names.isEmpty()) {
                 return build(new HashSet<>(artifacts.values()));
             } else {
-                return build(names.stream().map(this::getArtifact).collect(Collectors.toSet()));
+                return build(names.stream().map(this::get).collect(Collectors.toSet()));
             }
-        }
-
-        public void start(String... argArr) throws IOException, InterruptedException {
-            var args = new ArrayList<>(List.of(argArr));
-
-            Map<String, String> opts = Map.of(
-                    "bld", "Will Bld",
-                    "help", """
-                             help: This list
-                              bld: ...buildables | all if none
-                                   bld
-                                   bld ffi-opencl
-                              run: [ffi|my|seq]-[opencl|java|cuda|mock|hip] runnable (i.e has name.Main class)
-                                   run ffi-opencl mandel
-                                   run ffi-openc nbody
-                            clean: ...buildables | all if none
-                                   clean
-                                   clean ffi-opencl
-                            """,
-                    "clean", "Will clean",
-                    "run", "Will run"
-            );
-            record Action(String name, String help, List<String> args) {
-                int size() {
-                    return args.size();
-                }
-
-                boolean isEmpty() {
-                    return args.isEmpty();
-                }
-
-                String get() {
-                    var got = (size() > 0) ? args.removeFirst() : null;
-                    return got;
-                }
-
-                String str() {
-                    return name + " '" + String.join(" ", args) + "'";
-                }
-
-            }
-
-            List<Action> actions = new ArrayList<>();
-            while (!args.isEmpty()) {
-                String arg = args.removeFirst();
-                if (opts.containsKey(arg)) {
-                    List<String> subList = new ArrayList<>();
-                    while (!args.isEmpty() &&
-                            args.getFirst() instanceof String next
-                            && !opts.containsKey(next)) {
-                        subList.add(args.removeFirst());
-                    }
-                    actions.add(new Action(arg, opts.get(arg), subList));
-                } else {
-                    System.err.println("What " + arg + " " + String.join(" ", args));
-                }
-            }
-            if (actions.stream().anyMatch(a -> a.name.equals("help"))) {
-                actions.forEach(action ->
-                        System.out.println(action.help)
-                );
-            } else {
-                for (var action : actions) {
-                    switch (action.name()) {
-                        case "clean" -> clean(action.args);
-                        case "bld" -> build(action.args);
-                        case "run" -> {
-                            String backendName =action.get();
-                            if ( getArtifact("hat-backend-" + backendName + "-1.0") instanceof Jar backend) {
-                                String runnableName = action.get();
-                                if ( getArtifact("hat-example-" + runnableName + "-1.0") instanceof Dependency.ExecutableJar runnable) {
-                                    runnable.run(runnable.id().shortHyphenatedName() + ".Main", build(runnable, backend), args);
-                                } else {
-                                    System.out.println("Failed to find runnable ");
-                                }
-                            } else {
-                                System.out.println("Failed to find 'hat-backend-" + backendName + "-1.0'");
-                            }
-                        }
-                        default -> {
-                        }
-                    }
-                }
-            }
-
         }
     }
 
 
-    public static class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, Dependency.WithPath  {
-
-
-
+    public static class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, Dependency.WithPath,Dependency.ExecutableJar  {
         final Set<Path> exclude;
 
         private Jar(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
@@ -577,9 +489,6 @@ public final Reporter reporter;
                             "--source-path=" + javaSourcePathName()
                     )
             );
-
-
-
             JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
 
             id().project().clean(this, classesDir());
@@ -710,36 +619,6 @@ public final Reporter reporter;
         protected Path javaSourcePath() {
             return id().path().resolve("src/main/java");
         }
-    }
-
-    public static class RunnableJar extends Jar implements Dependency.ExecutableJar {
-
-
-        private RunnableJar(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
-            super(id, exclude, dependencies);
-            id.project.add(this);
-        }
-
-        static public RunnableJar of(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
-            return new RunnableJar(id, exclude, dependencies);
-        }
-
-        static public RunnableJar of(Project.Id id, Set<Path> exclude, Dependency... dependencies) {
-            return of(id, exclude, Set.of(dependencies));
-        }
-
-        static public RunnableJar of(Project.Id id, Set<Dependency> dependencies) {
-            return new RunnableJar(id, Set.of(), dependencies);
-        }
-
-        static public RunnableJar of(Project.Id id, Dependency... dependencies) {
-            return of(id, Set.of(), Set.of(dependencies));
-        }
-
-        @Override
-        public List<Path> generatedPaths() {
-            throw new IllegalStateException("who called me");
-        }
 
         @Override
         public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> args) {
@@ -780,6 +659,38 @@ public final Reporter reporter;
             }
         }
     }
+
+   // public static class RunnableJar extends Jar implements Dependency.ExecutableJar {
+
+/*
+        private RunnableJar(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
+            super(id, exclude, dependencies);
+            id.project.add(this);
+        }
+
+        static public RunnableJar of(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
+            return new RunnableJar(id, exclude, dependencies);
+        }
+
+        static public RunnableJar of(Project.Id id, Set<Path> exclude, Dependency... dependencies) {
+            return of(id, exclude, Set.of(dependencies));
+        }
+
+        static public RunnableJar of(Project.Id id, Set<Dependency> dependencies) {
+            return new RunnableJar(id, Set.of(), dependencies);
+        }
+
+        static public RunnableJar of(Project.Id id, Dependency... dependencies) {
+            return of(id, Set.of(), Set.of(dependencies));
+        }
+
+        @Override
+        public List<Path> generatedPaths() {
+            throw new IllegalStateException("who called me");
+        }
+*/
+
+ //   }
 
 
     public static class CMake extends DependencyImpl<CMake> implements Dependency.Buildable,Dependency.WithPath  {
