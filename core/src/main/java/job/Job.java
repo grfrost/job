@@ -117,6 +117,11 @@ public class Job {
             public void command(Dependency dependency, String command) {
 
             }
+            public void progress(Dependency dependency, String command) {
+                if (dependency != null) {
+                    progress.accept(dependency.id().projectRelativeHyphenatedName + ":" + command);
+                }
+            }
         };
     }
 
@@ -499,7 +504,7 @@ public final Reporter reporter;
                     id().project().reporter.command(this, "javac " +
                             String.join(" ", opts) + " " + String.join(" ",
                             listOfSources.stream().map(JavaSource::getName).collect(Collectors.toList())));
-                    id().project().reporter.progress(this, "java compiling "+listOfSources.size()+" files");
+
 
                     var diagnosticListener = new DiagnosticListener<JavaFileObject>() {
                         @Override
@@ -537,11 +542,12 @@ public final Reporter reporter;
 
                     record RootAndPath(Path root, Path path) {
                     }
+                    id().project().reporter.command(this, "jar cvf " + jarFile()+ " " +
+                            String.join(dirsToJar.stream().map(Path::toString).collect(Collectors.joining(" "))));
+                    id().project().reporter.progress(this, "compiled " +listOfSources.size()+" file"+(listOfSources.size()>1?"s":"")+" to " + jarFile().getFileName());
+
                     dirsToJar.forEach(r -> {
                         try {
-                            id().project().reporter.command(this, "jar cvf " + jarFile()+ " " +
-                                    String.join(dirsToJar.stream().map(Path::toString).collect(Collectors.joining(" "))));
-                            id().project().reporter.progress(this, "creating jar " + jarFile());
 
                             Files.walk(r)
                                     .filter(p -> !Files.isDirectory(p))
@@ -717,19 +723,18 @@ public final Reporter reporter;
         }
 
 
-        public boolean cmake(Consumer<String> lineConsumer, List<String> tailopts) {
+        public boolean cmake(Consumer<String> lineConsumer,   List<String> tailopts) {
             List<String> opts = new ArrayList<>();
             opts.add("cmake");
             opts.addAll(tailopts);
             boolean success;
 
             id.project().reporter.command(this,  String.join(" ", opts) );
-            id.project().reporter.progress(this,  String.join(" ", opts) );
+            id.project().reporter.progress(this,  "cmake "+tailopts.getFirst() );
             try {
                 var process = new ProcessBuilder()
                         .command(opts)
                         .redirectErrorStream(true)
-                        // .redirectOutput(ProcessBuilder.Redirect.INHERIT)
                         .start();
                 process.waitFor();
                 new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
@@ -743,7 +748,6 @@ public final Reporter reporter;
                     id().project().reporter.error(this, String.join(" ", opts));
                     throw new RuntimeException("CMake failed");
                 }
-               // cmakeProgres.cmakeInfo(this, "Done " + String.join(" ", opts));
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
@@ -840,15 +844,15 @@ public final Reporter reporter;
                 process.getErrorStream().transferTo(System.err);
                 process.waitFor();
                 if (process.exitValue() != 0) {
-                    System.out.println("No jextract : " + process.exitValue());
+                    System.err.println("No jextract : " + process.exitValue());
                     return false;
                 } else {
-                    System.out.println("CMake ok  " );
+                  //  System.out.println("CMake ok  " );
                     return true;
                 }
             }catch (Exception e){
                // e.printStackTrace();
-                System.out.println("No Jextract  : " );
+                System.err.println("No Jextract  : " );
                 return false;
             }
         }
@@ -925,7 +929,6 @@ public final Reporter reporter;
                 List<String> opts = new ArrayList<>(List.of());
                 opts.addAll(List.of(
                         "jextract",
-                      //  "/Users/grfrost/jextract-22/bin/jextract",
                         "--target-package", id().shortHyphenatedName(),
                         "--output", javaSourcePath().toString()
                 ));
@@ -942,7 +945,7 @@ public final Reporter reporter;
                 boolean success;
 
                 id().project().reporter.command(this, String.join(" ", opts));
-                id().project().reporter.progress(this, String.join(" ", opts));
+                id().project().reporter.progress(this, "extracting");
                 try {
                     var process = new ProcessBuilder()
                             .command(opts)
@@ -1059,7 +1062,6 @@ public final Reporter reporter;
                 properties = new Properties();
                 try {
                     properties.load(Files.newInputStream(propertiesPath));
-
                 } catch (IOException e) {
                     throw new IllegalStateException(e);
                 }
