@@ -293,11 +293,21 @@ public class Job {
                 }
                 return ordered;
             }
+            public static Set<Dependency> processOrder(Dependency ... dependencies) {
+               return processOrder(Set.of(dependencies));
+            }
 
             static Set<Dependency> build(Set<Dependency> jars) {
                 var ordered = processOrder(jars);
-                ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(Dependency.Buildable::build);
-                return ordered;
+            //   var unavailable =  ordered.stream().filter(d -> d instanceof Dependency.Optional optional && !optional.isAvailable()).findFirst();
+              // if  (unavailable.isPresent()){
+                //   System.out.println("dependencies contain optional and unavailable "+ unavailable.get().id().shortHyphenatedName);
+                  // return Set.of();
+              // }else {
+                //   System.out.println("No unavailable  dependencies ");
+                   ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(Dependency.Buildable::build);
+              // }
+               return ordered;
             }
 
             static Set<Dependency> clean(Set<Dependency> jars) {
@@ -1207,7 +1217,32 @@ public class Job {
             return available;
         }
     }
+    public static class Windows extends DependencyImpl<Linux> implements Job.Dependency.Optional {
+        final boolean available;
 
+        public Windows(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, buildDependencies);
+            available = System.getProperty("os.name").toLowerCase().contains("windows");
+        }
+
+        @Override
+        public boolean isAvailable() {
+            return available;
+        }
+    }
+    public static class Opt extends DependencyImpl<Opt> implements Job.Dependency.Optional {
+        final boolean available;
+
+        public Opt(Job.Project.Id id, boolean available, Set<Job.Dependency> buildDependencies) {
+            super(id, buildDependencies);
+            this.available = available;
+        }
+
+        @Override
+        public boolean isAvailable() {
+            return available;
+        }
+    }
 }
 
 
