@@ -44,55 +44,65 @@ public class Job {
         public final Consumer<String> info = System.out::println;
         public final Consumer<String> warning = System.out::println;
         public final Consumer<String> note = System.out::println;
+
         public void command(Dependency dependency, String command) {
             if (dependency != null) {
-                this.command.accept("# "+dependency.id().projectRelativeHyphenatedName+" command line ");
+                this.command.accept("# " + dependency.id().projectRelativeHyphenatedName + " command line ");
             }
             this.command.accept(command);
         }
+
         public void progress(Dependency dependency, String command) {
             if (dependency != null) {
                 progress.accept("# " + dependency.id().projectRelativeHyphenatedName + " " + command);
             }
         }
+
         public void error(Dependency dependency, String command) {
             if (dependency != null) {
-                error.accept("# "+dependency.id().projectRelativeHyphenatedName+" error ");
+                error.accept("# " + dependency.id().projectRelativeHyphenatedName + " error ");
             }
             error.accept(command);
         }
+
         public void info(Dependency dependency, String command) {
-           // if (dependency != null) {
-           //     info.accept("# "+dependency.id().projectRelativeHyphenatedName+" info ");
-          //  }
+            // if (dependency != null) {
+            //     info.accept("# "+dependency.id().projectRelativeHyphenatedName+" info ");
+            //  }
             info.accept(command);
         }
+
         public void note(Dependency dependency, String command) {
-          //  if (dependency != null) {
+            //  if (dependency != null) {
             //    note.accept("# "+dependency.id().projectRelativeHyphenatedName+" note ");
-          //  }
+            //  }
             note.accept(command);
         }
+
         public void warning(Dependency dependency, String command) {
-         //   if (dependency != null) {
-          //      warning.accept("# "+dependency.id().projectRelativeHyphenatedName+" warning ");
-          //  }
+            //   if (dependency != null) {
+            //      warning.accept("# "+dependency.id().projectRelativeHyphenatedName+" warning ");
+            //  }
             warning.accept(command);
         }
-        static Reporter verbose = new  Reporter();
-        public static Reporter commandsAndErrors = new  Reporter(){
+
+        static Reporter verbose = new Reporter();
+        public static Reporter commandsAndErrors = new Reporter() {
             @Override
             public void warning(Dependency dependency, String command) {
 
             }
+
             @Override
             public void info(Dependency dependency, String command) {
 
             }
+
             @Override
             public void note(Dependency dependency, String command) {
 
             }
+
             @Override
             public void progress(Dependency dependency, String command) {
 
@@ -100,23 +110,27 @@ public class Job {
 
         };
 
-        public static Reporter progressAndErrors = new  Reporter(){
+        public static Reporter progressAndErrors = new Reporter() {
             @Override
             public void warning(Dependency dependency, String command) {
 
             }
+
             @Override
             public void info(Dependency dependency, String command) {
 
             }
+
             @Override
             public void note(Dependency dependency, String command) {
 
             }
+
             @Override
             public void command(Dependency dependency, String command) {
 
             }
+
             public void progress(Dependency dependency, String command) {
                 if (dependency != null) {
                     progress.accept(dependency.id().projectRelativeHyphenatedName + ":" + command);
@@ -180,13 +194,15 @@ public class Job {
     }
 
     public static class Project {
-        public record Id(Project project, String fullHyphenatedName, String projectRelativeHyphenatedName, String shortHyphenatedName, String version,
+        public record Id(Project project, String fullHyphenatedName, String projectRelativeHyphenatedName,
+                         String shortHyphenatedName, String version,
                          Path path) {
             String str() {
-                return project.name() + " " + fullHyphenatedName + " "+projectRelativeHyphenatedName+" " + shortHyphenatedName + " " + version + " " + (path == null ? "null" : path);
+                return project.name() + " " + fullHyphenatedName + " " + projectRelativeHyphenatedName + " " + shortHyphenatedName + " " + version + " " + (path == null ? "null" : path);
             }
+
             static Id of(Project project, String projectRelativeHyphenatedName, String shortHyphenatedName, String version, Path path) {
-                return new Id(project, project.name()+"-"+projectRelativeHyphenatedName+"-"+version, projectRelativeHyphenatedName, shortHyphenatedName, version, path);
+                return new Id(project, project.name() + "-" + projectRelativeHyphenatedName + "-" + version, projectRelativeHyphenatedName, shortHyphenatedName, version, path);
             }
         }
 
@@ -232,11 +248,11 @@ public class Job {
                 } else {
                     if (tailNames.length == 1) {
                         var shortHyphenatedName = tailNames[0];
-                        id = Id.of(project,projectRelativeHyphenatedName,  shortHyphenatedName, version,expectedPath);
+                        id = Id.of(project, projectRelativeHyphenatedName, shortHyphenatedName, version, expectedPath);
                     } else {
                         var midNames = Arrays.copyOfRange(tailNames, 0, tailNames.length);
                         var shortHyphenatedName = String.join("-", midNames);
-                        id = Id.of(project,projectRelativeHyphenatedName,  shortHyphenatedName, version,expectedPath);
+                        id = Id.of(project, projectRelativeHyphenatedName, shortHyphenatedName, version, expectedPath);
                     }
                 }
             }
@@ -313,7 +329,9 @@ public class Job {
         public Path confPath() {
             return confPath;
         }
-public final Reporter reporter;
+
+        public final Reporter reporter;
+
         public Project(Path root, Reporter reporter) {
             this.rootPath = root;
             if (!Files.exists(root)) {
@@ -324,9 +342,6 @@ public final Reporter reporter;
             this.reporter = reporter;
 
         }
-
-
-
 
 
         public Dependency add(Dependency dependency) {
@@ -355,9 +370,9 @@ public final Reporter reporter;
                 if (Files.exists(path)) {
                     try (var files = Files.walk(path)) {
                         files.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-                        reporter.command(dependency, "rm -rf "+path);
+                        reporter.command(dependency, "rm -rf " + path);
                         mkdir(path);
-                        reporter.command(dependency,"mkdir -p "+path);
+                        reporter.command(dependency, "mkdir -p " + path);
                     } catch (Throwable t) {
                         throw new RuntimeException(t);
                     }
@@ -407,7 +422,7 @@ public final Reporter reporter;
     }
 
 
-    public static class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, Dependency.WithPath,Dependency.ExecutableJar  {
+    public static class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, Dependency.WithPath, Dependency.ExecutableJar {
         final Set<Path> exclude;
 
         private Jar(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
@@ -517,7 +532,7 @@ public final Reporter reporter;
                                 id().project().reporter.warning(Jar.this, "!!" + diagnostic.toString());
                             } else if (diagnostic.getKind() == Diagnostic.Kind.NOTE) {
                                 id().project().reporter.note(Jar.this, diagnostic.toString());
-                            }else {
+                            } else {
                                 id().project().reporter.warning(Jar.this, diagnostic.getKind() + ":" + diagnostic.toString());
                             }
                         }
@@ -542,9 +557,9 @@ public final Reporter reporter;
 
                     record RootAndPath(Path root, Path path) {
                     }
-                    id().project().reporter.command(this, "jar cvf " + jarFile()+ " " +
+                    id().project().reporter.command(this, "jar cvf " + jarFile() + " " +
                             String.join(dirsToJar.stream().map(Path::toString).collect(Collectors.joining(" "))));
-                    id().project().reporter.progress(this, "compiled " +listOfSources.size()+" file"+(listOfSources.size()>1?"s":"")+" to " + jarFile().getFileName());
+                    id().project().reporter.progress(this, "compiled " + listOfSources.size() + " file" + (listOfSources.size() > 1 ? "s" : "") + " to " + jarFile().getFileName());
 
                     dirsToJar.forEach(r -> {
                         try {
@@ -656,7 +671,7 @@ public final Reporter reporter;
             try {
                 var process = new ProcessBuilder().directory(id().project().rootPath().toFile()).redirectErrorStream(true).command(opts).start();
                 process.waitFor();
-                if (process.exitValue()!=0) {
+                if (process.exitValue() != 0) {
                     System.out.println("Java failed to execute, is a valid java in your path ? " + id().fullHyphenatedName());
                 }
                 return process.exitValue() == 0;
@@ -666,7 +681,7 @@ public final Reporter reporter;
         }
     }
 
-   // public static class RunnableJar extends Jar implements Dependency.ExecutableJar {
+    // public static class RunnableJar extends Jar implements Dependency.ExecutableJar {
 
 /*
         private RunnableJar(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
@@ -696,15 +711,15 @@ public final Reporter reporter;
         }
 */
 
- //   }
+    //   }
 
 
-    public static class CMake extends DependencyImpl<CMake> implements Dependency.Buildable,Dependency.WithPath  {
+    public static class CMake extends DependencyImpl<CMake> implements Dependency.Buildable, Dependency.WithPath {
 
 
         public static boolean isInPath() {
-            try{
-                var process =new ProcessBuilder().command("cmake", "--version").start();
+            try {
+                var process = new ProcessBuilder().command("cmake", "--version").start();
                 process.getInputStream().transferTo(System.out);
                 process.getErrorStream().transferTo(System.err);
                 process.waitFor();
@@ -715,22 +730,22 @@ public final Reporter reporter;
                     System.out.println("CMake in path ");
                     return true;
                 }
-            }catch (Exception e){
-               // e.printStackTrace();
-                System.out.println("No Cmake : " );
+            } catch (Exception e) {
+                // e.printStackTrace();
+                System.out.println("No Cmake : ");
                 return false;
             }
         }
 
 
-        public boolean cmake(Consumer<String> lineConsumer,   List<String> tailopts) {
+        public boolean cmake(Consumer<String> lineConsumer, List<String> tailopts) {
             List<String> opts = new ArrayList<>();
             opts.add("cmake");
             opts.addAll(tailopts);
             boolean success;
 
-            id.project().reporter.command(this,  String.join(" ", opts) );
-            id.project().reporter.progress(this,  "cmake "+tailopts.getFirst() );
+            id.project().reporter.command(this, String.join(" ", opts));
+            id.project().reporter.progress(this, "cmake " + tailopts.getFirst());
             try {
                 var process = new ProcessBuilder()
                         .command(opts)
@@ -740,7 +755,7 @@ public final Reporter reporter;
                 new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
                         .forEach(line -> {
                             lineConsumer.accept(line);
-                            id().project().reporter.info(this,  line);
+                            id().project().reporter.info(this, line);
                         });
                 success = (process.exitValue() == 0);
 
@@ -836,10 +851,165 @@ public final Reporter reporter;
     }
 
 
+    interface JExtractOptProvider {
+        List<String> jExtractOpts();
+        default void writeCompilerFlags(Path outputDir){} // hack for mac
+    }
+
+
+    public static class OpenGL extends Job.CMakeInfo implements JExtractOptProvider{
+
+        final Path glLibrary;
+
+        public OpenGL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, "OpenGL", "OPENGL_FOUND", Set.of(
+                    "OPENGL_FOUND",
+                    "OPENGL_GLU_FOUND",
+                    "OPENGL_gl_LIBRARY",
+                    "OPENGL_glu_LIBRARY",
+                    "OPENGL_INCLUDE_DIR",
+                    "OPENGL_LIBRARIES",
+                    "OPENGL_LIBRARY",
+                    "OpenGL_FOUND",
+                    "CMAKE_HOST_SYSTEM_NAME",
+                    "CMAKE_HOST_SYSTEM_PROCESSOR",
+                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
+            ), buildDependencies);
+            glLibrary = asPath("OpenGL_glu_Library");
+        }
+
+        @Override public void writeCompilerFlags(Path outputDir) {
+            String sysName = (String) properties.get("CMAKE_HOST_SYSTEM_NAME");
+            if (sysName.equals("Darwin")) {
+                try {
+                    Path compileFLags = outputDir.resolve("compile_flags.txt");
+                    //System.out.println("Creating "+compileFLags.toAbsolutePath());
+                    Files.writeString(compileFLags, "-F" + properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES") + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+
+        @Override
+        public List<String> jExtractOpts() {
+            if (isAvailable()) {
+                String glutLibName = "GLUT";
+                String sysName = (String) properties.get("CMAKE_HOST_SYSTEM_NAME");
+                if (sysName.equals("Darwin")) {
+                    List<String> opts = new ArrayList<>(List.of());
+                    Stream.of(glutLibName, "OpenGL")
+                            .forEach(s ->
+                                    opts.addAll(
+                                            List.of("--library", ":/System/Library/Frameworks/" + s + ".framework/" + s)
+                                    )
+                            );
+                    var fwk = ((String)properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"));
+                 //   System.out.println("fwk = '"+fwk+"'");
+                    opts.addAll(
+                            List.of(
+                                    "--header-class-name", "opengl_h",
+                                    fwk + "/"+glutLibName + ".framework/Headers/" + glutLibName + ".h"
+
+                            )
+                    );
+                    return opts;
+                } else if (sysName.equals("Linux")) {
+
+                }
+
+            }
+            return null;
+        }
+
+    }
+
+
+    public static class Cuda extends Job.CMakeInfo {
+        public Cuda(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, "CUDAToolkit", "CUDATOOLKIT_FOUND", Set.of(
+                    "CUDATOOLKIT_FOUND",
+                    "CUDA_OpenCL_LIBRARY",
+                    "CUDA_cuFile_LIBRARY",
+                    "CUDA_cuda_driver_LIBRARY",
+                    "CUDA_cudart_LIBRARY",
+                    "CUDAToolkit_BIN_DIR",
+                    "CUDAToolkit_INCLUDE_DIRS",
+                    "CUDAToolkit_NVCC_EXECUTABLE",
+                    "CUDAToolkit_LIBRARY_DIR",
+                    "CUDAToolkit_Version",
+                    "CMAKE_HOST_SYSTEM_NAME",
+                    "CMAKE_HOST_SYSTEM_PROCESSOR",
+                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
+
+            ), buildDependencies);
+        }
+    }
+
+    public static class OpenCL extends Job.CMakeInfo implements JExtractOptProvider {
+        public OpenCL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
+            super(id, "OpenCL", "OPENCL_FOUND", Set.of(
+                    "OPENCL_FOUND",
+                    "CMAKE_HOST_SYSTEM_NAME",
+                    "CMAKE_HOST_SYSTEM_PROCESSOR",
+                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES",
+                    "OpenCL_FOUND",
+                    "OpenCL_INCLUDE_DIRS",
+                    "OpenCL_LIBRARY",
+                    "OpenCL_VERSION_STRING"
+            ), buildDependencies);
+        }
+
+        @Override
+        public void writeCompilerFlags(Path outputDir) {
+            String sysName = (String) properties.get("CMAKE_HOST_SYSTEM_NAME");
+            if (sysName.equals("Darwin")) {
+                try {
+                    Path compileFLags = outputDir.resolve("compile_flags.txt");
+                    //System.out.println("Creating " + compileFLags.toAbsolutePath());
+                    Files.writeString(compileFLags, "-F" + properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES") + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+
+        @Override
+        public List<String> jExtractOpts() {
+            if (isAvailable()) {
+                String libName = "OpenCL";
+                String sysName = (String) properties.get("CMAKE_HOST_SYSTEM_NAME");
+                if (sysName.equals("Darwin")) {
+                    List<String> opts = new ArrayList<>(List.of());
+                    Stream.of(libName)
+                            .forEach(s ->
+                                    opts.addAll(
+                                            List.of("--library", ":/System/Library/Frameworks/" + s + ".framework/" + s)
+                                    )
+                            );
+                    var fwk = ((String)properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"));
+                   // System.out.println("fwk = '"+fwk+"'");
+                    opts.addAll(
+                            List.of(
+                                    "--header-class-name", "opencl_h",
+                                    fwk + "/"+libName + ".framework/Headers/opencl.h"
+                            )
+                    );
+                    return opts;
+                } else if (sysName.equals("Linux")) {
+
+                }
+
+            }
+            return null;
+        }
+    }
+
+
     public static class JExtract extends Jar {
         public static boolean isInPath() {
-            try{
-                var process =new ProcessBuilder().command("jextract", "--version").start();
+            try {
+                var process = new ProcessBuilder().command("jextract", "--version").start();
                 process.getInputStream().transferTo(System.out);
                 process.getErrorStream().transferTo(System.err);
                 process.waitFor();
@@ -847,12 +1017,10 @@ public final Reporter reporter;
                     System.err.println("No jextract : " + process.exitValue());
                     return false;
                 } else {
-                  //  System.out.println("CMake ok  " );
                     return true;
                 }
-            }catch (Exception e){
-               // e.printStackTrace();
-                System.err.println("No Jextract  : " );
+            } catch (Exception e) {
+                System.err.println("No Jextract  : ");
                 return false;
             }
         }
@@ -862,64 +1030,6 @@ public final Reporter reporter;
             return id.path().resolve("src/main/java");
         }
 
-
-
-
-        public interface ExtractSpec {
-            Path header();
-
-            List<Path> frameworks();
-        }
-
-        public record Mac(Path macSdkSysLibFrameWorks, Path macSysLibFrameWorks, Path header,
-                          List<Path> frameworks) implements ExtractSpec {
-            public static Mac of(CMakeInfo cMakeInfo, String... frameworks) {
-                var value = (String) cMakeInfo.properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES");
-                Path macSdkSysLibFrameWorks = Path.of(value);
-                Path macSysLibFrameWorks = Path.of("/System/Library/Frameworks");
-                var firstName = frameworks[0];
-                return new Mac(
-                        macSdkSysLibFrameWorks,
-                        macSysLibFrameWorks,
-                        macSdkSysLibFrameWorks.resolve(firstName.toUpperCase() + ".framework/Headers/" + firstName + ".h"),
-                        Stream.of(frameworks).map(s -> macSysLibFrameWorks.resolve(s + ".framework/" + s)).collect(Collectors.toList())
-                );
-            }
-
-            void writeCompileFlags(Path outputDir) {
-                try {
-                    Path compileFLags = outputDir.resolve("compile_flags.txt");
-                    Files.writeString(compileFLags, "-F" + macSdkSysLibFrameWorks + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE);
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
-        }
-
-        public record Linux(Path macSdkSysLibFrameWorks, Path macSysLibFrameWorks, Path header,
-                            List<Path> frameworks) implements ExtractSpec {
-            public static Mac of(CMakeInfo cMakeInfo, String... frameworks) {
-                var value = (String) cMakeInfo.properties.get("");
-                Path macSdkSysLibFrameWorks = Path.of(value);
-                Path macSysLibFrameWorks = Path.of("/System/Library/Frameworks");
-                var firstName = frameworks[0];
-                return new Mac(
-                        macSdkSysLibFrameWorks,
-                        macSysLibFrameWorks,
-                        macSdkSysLibFrameWorks.resolve(firstName.toUpperCase() + ".framework/Headers/" + firstName + ".h"),
-                        Stream.of(frameworks).map(s -> macSysLibFrameWorks.resolve(s + ".framework/" + s)).collect(Collectors.toList())
-                );
-            }
-
-            void writeCompileFlags(Path outputDir) {
-                try {
-                    Path compileFLags = outputDir.resolve("compile_flags.txt");
-                    Files.writeString(compileFLags, "-F" + macSdkSysLibFrameWorks + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE);
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
-        }
 
         @Override
         public boolean build() {
@@ -932,18 +1042,14 @@ public final Reporter reporter;
                         "--target-package", id().shortHyphenatedName(),
                         "--output", javaSourcePath().toString()
                 ));
-                spec.frameworks().forEach(library -> opts.addAll(List.of(
-                        "--library", ":" + library
-                )));
-                opts.addAll(List.of(
-                        "--header-class-name", id().shortHyphenatedName() + "_h",
-                        spec.header().toString()
-                ));
-                if (spec instanceof Mac mac) {
-                    mac.writeCompileFlags(id().project().rootPath);
+                List<String> providerOpts = new ArrayList<>(List.of());
+                if (optProvider  != null){
+                    providerOpts.addAll(optProvider.jExtractOpts());
                 }
+                opts.addAll(providerOpts);
+                optProvider.writeCompilerFlags(id().project().rootPath);
                 boolean success;
-
+                //System.out.println("Jextract cl = "+ String.join(" ", opts));
                 id().project().reporter.command(this, String.join(" ", opts));
                 id().project().reporter.progress(this, "extracting");
                 try {
@@ -974,48 +1080,26 @@ public final Reporter reporter;
             return false;
         }
 
-        final ExtractSpec spec;
+        final JExtractOptProvider optProvider;
 
-        private JExtract(Project.Id id, ExtractSpec spec, Set<Path> exclude, Set<Dependency> dependencies) {
+        private JExtract(Project.Id id, Set<Path> exclude, Set<Dependency> dependencies) {
             super(id, exclude, dependencies);
-            this.spec = spec;
+            var optionalProvider = dependencies.stream().filter(dep -> dep instanceof JExtractOptProvider).map(dep -> (JExtractOptProvider)dep).findFirst();
+            this.optProvider = optionalProvider.orElseThrow();
             id.project.add(this);
         }
 
-        static JExtract of(Project.Id id, ExtractSpec spec, Set<Path> exclude, Set<Dependency> dependencies) {
-            return new JExtract(id, spec, exclude, dependencies);
+        static public JExtract extract(Project.Id id, Set<Dependency> dependencies) {
+            return new JExtract(id,  Set.of(), dependencies);
+        }
+        static public JExtract extract(Project.Id id, Dependency ... dependencies) {
+            return new JExtract(id,  Set.of(), Set.of(dependencies));
         }
 
-        static JExtract of(Project.Id id, ExtractSpec spec, Set<Path> exclude, Dependency... dependencies) {
-            return of(id, spec, exclude, Set.of(dependencies));
-        }
-
-        static JExtract of(Project.Id id, ExtractSpec spec, Set<Dependency> dependencies) {
-            return new JExtract(id, spec, Set.of(), dependencies);
-        }
-
-        public static JExtract of(Project.Id id, ExtractSpec spec, Dependency... dependencies) {
-            return of(id, spec, Set.of(), Set.of(dependencies));
-        }
     }
 
 
     public static abstract class CMakeInfo extends Job.CMake implements Job.Dependency.Optional {
-       /* interface Mapper{
-
-        }
-        interface PathMapper extends Mapper{
-            Path map(String value);
-            PathMapper impl =  (s)->Path.of(s);
-        }
-        interface BooleanMapper extends Mapper{
-            boolean map(String value);
-            BooleanMapper impl =  (s)->Boolean.getBoolean(s);
-        }
-        interface StringMapper extends Mapper{
-            String map(String value);
-            StringMapper impl =  (s)->s;
-        }*/
 
         Path asPath(String key) {
             return properties.containsKey(key) ? Path.of((String) properties.get(key)) : null;
@@ -1124,67 +1208,6 @@ public final Reporter reporter;
         }
     }
 
-    public static class OpenGL extends Job.CMakeInfo {
-
-        final Path glLibrary;
-
-        public OpenGL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id, "OpenGL", "OPENGL_FOUND", Set.of(
-                    "OPENGL_FOUND",
-                    "OPENGL_GLU_FOUND",
-                    "OPENGL_gl_LIBRARY",
-                    "OPENGL_glu_LIBRARY",
-                    "OPENGL_INCLUDE_DIR",
-                    "OPENGL_LIBRARIES",
-                    "OPENGL_LIBRARY",
-                    "OpenGL_FOUND",
-                    "CMAKE_HOST_SYSTEM_NAME",
-                    "CMAKE_HOST_SYSTEM_PROCESSOR",
-                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
-            ), buildDependencies);
-            glLibrary = asPath("OpenGL_glu_Library");
-        }
-
-    }
-
-    public static class OpenCL extends Job.CMakeInfo {
-
-
-        public OpenCL(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id, "OpenCL", "OPENCL_FOUND", Set.of(
-                    "OPENCL_FOUND",
-                    "CMAKE_HOST_SYSTEM_NAME",
-                    "CMAKE_HOST_SYSTEM_PROCESSOR",
-                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES",
-                    "OpenCL_FOUND",
-                    "OpenCL_INCLUDE_DIRS",
-                    "OpenCL_LIBRARY",
-                    "OpenCL_VERSION_STRING"
-            ), buildDependencies);
-
-        }
-    }
-
-    public static class Cuda extends Job.CMakeInfo {
-        public Cuda(Job.Project.Id id, Set<Job.Dependency> buildDependencies) {
-            super(id, "CUDAToolkit", "CUDATOOLKIT_FOUND", Set.of(
-                    "CUDATOOLKIT_FOUND",
-                    "CUDA_OpenCL_LIBRARY",
-                    "CUDA_cuFile_LIBRARY",
-                    "CUDA_cuda_driver_LIBRARY",
-                    "CUDA_cudart_LIBRARY",
-                    "CUDAToolkit_BIN_DIR",
-                    "CUDAToolkit_INCLUDE_DIRS",
-                    "CUDAToolkit_NVCC_EXECUTABLE",
-                    "CUDAToolkit_LIBRARY_DIR",
-                    "CUDAToolkit_Version",
-                    "CMAKE_HOST_SYSTEM_NAME",
-                    "CMAKE_HOST_SYSTEM_PROCESSOR",
-                    "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
-
-            ), buildDependencies);
-        }
-    }
 }
 
 
