@@ -264,62 +264,6 @@ public class Job {
         }
 
 
-        public static class Dag {
-            static void recurse(Map<Dependency, Set<Dependency>> map, Dependency from) {
-                var set = map.computeIfAbsent(from, _ -> new LinkedHashSet<>());
-                var deps = from.dependencies();
-                deps.forEach(dep -> {
-                    set.add(dep);
-                    recurse(map, dep);
-                });
-            }
-
-            public static Set<Dependency> processOrder(Set<Dependency> jars) {
-                Map<Dependency, Set<Dependency>> map = new LinkedHashMap<>();
-                Set<Dependency> ordered = new LinkedHashSet<>();
-                jars.forEach(jar -> recurse(map, jar));
-                while (!map.isEmpty()) {
-                    var leaves = map.entrySet().stream()
-                            .filter(e -> e.getValue().isEmpty())    // if this entry has zero dependencies
-                            .map(Map.Entry::getKey)                 // get the key
-                            .collect(Collectors.toSet());
-                    map.forEach((k, v) ->
-                            leaves.forEach(v::remove)
-                    );
-                    leaves.forEach(leaf -> {
-                        map.remove(leaf);
-                        ordered.add(leaf);
-                    });
-                }
-                return ordered;
-            }
-            public static Set<Dependency> processOrder(Dependency ... dependencies) {
-               return processOrder(Set.of(dependencies));
-            }
-
-            static Set<Dependency> build(Set<Dependency> jars) {
-                var ordered = processOrder(jars);
-            //   var unavailable =  ordered.stream().filter(d -> d instanceof Dependency.Optional optional && !optional.isAvailable()).findFirst();
-              // if  (unavailable.isPresent()){
-                //   System.out.println("dependencies contain optional and unavailable "+ unavailable.get().id().shortHyphenatedName);
-                  // return Set.of();
-              // }else {
-                //   System.out.println("No unavailable  dependencies ");
-                   ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(
-                           Dependency.Buildable::build
-                   );
-              // }
-               return ordered;
-            }
-
-            static Set<Dependency> clean(Set<Dependency> jars) {
-                var ordered = processOrder(jars);
-                ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(Dependency.Buildable::clean);
-                return ordered;
-            }
-
-        }
-
         private final Path rootPath;
         private final Path buildPath;
         private final Path confPath;
@@ -511,7 +455,7 @@ public class Job {
                             "-g",
                             "-d", classesDirName()
                     ));
-            var deps = classPath(Project.Dag.processOrder(dependencies()));
+            var deps = classPath(Dag.processOrder(dependencies()));
             if (!deps.isEmpty()) {
                 opts.addAll(List.of(
                         "--class-path=" + deps
@@ -1290,6 +1234,7 @@ public class Job {
             return available;
         }
     }
+
 }
 
 
