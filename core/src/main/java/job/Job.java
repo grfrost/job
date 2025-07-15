@@ -305,7 +305,9 @@ public class Job {
                   // return Set.of();
               // }else {
                 //   System.out.println("No unavailable  dependencies ");
-                   ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(Dependency.Buildable::build);
+                   ordered.stream().filter(d -> d instanceof Dependency.Buildable).map(d -> (Dependency.Buildable) d).forEach(
+                           Dependency.Buildable::build
+                   );
               // }
                return ordered;
             }
@@ -664,7 +666,8 @@ public class Job {
                     javaExecutablePath,
                     "--enable-preview",
                     "--enable-native-access=ALL-UNNAMED"));
-            if (id().shortHyphenatedName().equals("nbody")) {
+            // FIX this we need top pass opts to run!
+            if (id().shortHyphenatedName().equals("nbody") && System.getProperty("os.name").toLowerCase().contains("mac")) {
                 opts.addAll(List.of(
                         "-XstartOnFirstThread"
                 ));
@@ -677,6 +680,7 @@ public class Job {
             ));
             opts.addAll(args);
             id().project().reporter.command(this, String.join(" ", opts));
+            System.out.println(String.join(" ", opts));
             id().project().reporter.progress(this, "running");
             try {
                 var process = new ProcessBuilder().directory(id().project().rootPath().toFile()).redirectErrorStream(true).command(opts).start();
@@ -904,9 +908,10 @@ public class Job {
         @Override
         public List<String> jExtractOpts() {
             if (isAvailable()) {
-                String glutLibName = "GLUT";
-                String sysName = (String) properties.get("CMAKE_HOST_SYSTEM_NAME");
+                 String sysName = (String) properties.get("CMAKE_HOST_SYSTEM_NAME");
                 if (sysName.equals("Darwin")) {
+                    String glutLibName = "GLUT";
+
                     List<String> opts = new ArrayList<>(List.of());
                     Stream.of(glutLibName, "OpenGL")
                             .forEach(s ->
@@ -925,7 +930,28 @@ public class Job {
                     );
                     return opts;
                 } else if (sysName.equals("Linux")) {
+                    List<String> opts = new ArrayList<>(List.of());
+                    String[] libs = ((String)properties.get("OPENGL_LIBRARY")).split(";");
+                    Stream.of(libs)
+                            .forEach(s ->
+                                    opts.addAll(
+                                            List.of("--library",  ":"+s)
+                                    )
+                            );
+                    opts.add("--library");
+                    opts.add(":"+"/usr/lib/x86_64-linux-gnu/libglut.so");
+                    opts.add("--include-dir");
+                    opts.add("/usr/include/linux");
+                    var fwk = ((String)properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"));
+                    //   System.out.println("fwk = '"+fwk+"'");
+                    opts.addAll(
+                            List.of(
+                                    "--header-class-name", "opengl_h", "/usr/include/GL/glut.h"
+                           //         fwk + "/"+glutLibName + ".framework/Headers/" + glutLibName + ".h"
 
+                            )
+                    );
+                    return opts;
                 }
 
             }
@@ -1007,7 +1033,23 @@ public class Job {
                     );
                     return opts;
                 } else if (sysName.equals("Linux")) {
-
+                    List<String> opts = new ArrayList<>(List.of());
+                    Stream.of(libName)
+                            .forEach(s ->
+                                    opts.addAll(
+                                            List.of("--library", (String)properties.get("OpenCL_LIBRARY"))
+                                    )
+                            );
+                    opts.add("--include-dir");
+                    opts.add("/usr/include/linux");
+                    var fwk = ((String)properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"));
+                    // System.out.println("fwk = '"+fwk+"'");
+                    opts.addAll(
+                            List.of(
+                                    "--header-class-name", "opencl_h", (String)properties.get("OpenCL_INCLUDE_DIRS")+"/CL/opencl.h"
+                            )
+                    );
+                    return opts;
                 }
 
             }
@@ -1054,13 +1096,15 @@ public class Job {
                 ));
                 List<String> providerOpts = new ArrayList<>(List.of());
                 if (optProvider  != null){
-                    providerOpts.addAll(optProvider.jExtractOpts());
+                    var optProviderOpts = optProvider.jExtractOpts();
+                    providerOpts.addAll(optProviderOpts);
                 }
                 opts.addAll(providerOpts);
                 optProvider.writeCompilerFlags(id().project().rootPath);
                 boolean success;
                 //System.out.println("Jextract cl = "+ String.join(" ", opts));
                 id().project().reporter.command(this, String.join(" ", opts));
+                System.out.println( String.join(" ", opts));
                 id().project().reporter.progress(this, "extracting");
                 try {
                     var process = new ProcessBuilder()
@@ -1069,7 +1113,10 @@ public class Job {
                             .start();
                     process.waitFor();
                     new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
-                            .forEach(s -> id().project.reporter.warning(this, s));
+                            .forEach(s ->{
+                                    id().project.reporter.warning(this, s);
+                                    System.err.println(s);
+                                    });
                     success = (process.exitValue() == 0);
                     if (!success) {
                         id().project.reporter.error(this, "error " + process.exitValue());
