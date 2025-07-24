@@ -1,7 +1,3 @@
-import static java.lang.System.out;
-
-
- 
 static String hex(int v){
    var s = Integer.toBinaryString(v);
    return "00000000".substring(s.length())+s;

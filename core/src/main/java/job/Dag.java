@@ -6,14 +6,38 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Dag {
-    static class Graph {
-        Map<Job.Dependency, Set<Job.Dependency>> map = new LinkedHashMap<>();
-        record Edge(Job.Dependency from, Job.Dependency to) {
-
+        record DotBuilder(Consumer<String> consumer){
+           // https://graphviz.org/doc/info/lang.html
+            static DotBuilder of(Consumer<String> stringConsumer, Consumer<DotBuilder> builderConsumer){
+                DotBuilder db = new DotBuilder(stringConsumer);
+                db.append("strict digraph graphname {").append("\n");
+                db.append("   node [shape=record];\n");
+                builderConsumer.accept(db);
+                db.append("\n}");
+                return db;
+            }
+            DotBuilder append(String s){
+                consumer.accept(s);
+                return this;
+            }
+            DotBuilder quoted(String s){
+                append("\"").append(s).append("\"");
+                return this;
+            }
+            DotBuilder node(String n, String label){
+                return append("\n   ").quoted(n).append("[").append("label").append("=").quoted(label).append("]").append(";");
+            }
+             DotBuilder edge(String from, String to){
+                  return append("\n   ").quoted(from).append("->").quoted(to).append(";");
+             }
         }
+        Map<Job.Dependency, Set<Job.Dependency>> map = new LinkedHashMap<>();
+        record Edge(Job.Dependency from, Job.Dependency to) {}
         List<Edge> edges = new ArrayList<>();
          public void recurse( Job.Dependency from) {
             var set = map.computeIfAbsent(from, _ -> new LinkedHashSet<>());
@@ -24,33 +48,34 @@ public class Dag {
                 recurse( dep);
             });
         }
-        Graph(Set<Job.Dependency> deps) {
+        public Dag(Set<Job.Dependency> deps) {
             deps.forEach(this::recurse);
+           // System.out.println(this);
         }
-        @Override public String toString(){
-             StringBuilder sb = new StringBuilder();
-            sb.append("strict digraph graphname {");
-            edges.forEach(e-> sb
-                    .append("   ")
-                    .append('"')
-                    .append(e.from.id().projectRelativeHyphenatedName())
-                    .append("\" -> \n")
-                    .append(e.to.id().projectRelativeHyphenatedName())
-                    .append('"')
-            );
-            sb.append("}");
+        public Dag(Job.Dependency ...deps) {
+             this(Stream.of(deps).collect(Collectors.toSet()));
+        }
+
+        public String toDot(){
+            StringBuilder sb = new StringBuilder();
+            DotBuilder.of(sb::append, db-> {
+                map.keySet().forEach(k -> {
+                    db.node(k.id().projectRelativeHyphenatedName(), k.id().projectRelativeHyphenatedName());
+                });
+                edges.forEach(e ->
+                        db.edge(e.from.id().projectRelativeHyphenatedName(), e.to.id().projectRelativeHyphenatedName())
+                );
+            });
             return sb.toString();
         }
-        Set<Job.Dependency> ordered(){
+        public Set<Job.Dependency> ordered(){
             Set<Job.Dependency> ordered = new LinkedHashSet<>();
             while (!map.isEmpty()) {
                 var leaves = map.entrySet().stream()
                         .filter(e -> e.getValue().isEmpty())    // if this entry has zero dependencies
                         .map(Map.Entry::getKey)                 // get the key
                         .collect(Collectors.toSet());
-                map.forEach((k, v) ->
-                        leaves.forEach(v::remove)
-                );
+                map.values().forEach(v -> leaves.forEach(v::remove));
                 leaves.forEach(leaf -> {
                     map.remove(leaf);
                     ordered.add(leaf);
@@ -58,36 +83,6 @@ public class Dag {
             }
             return ordered;
         }
-    }
-    public static Set<Job.Dependency> processOrder(Set<Job.Dependency> jars) {
-        Graph graph = new Graph(jars);
 
-        return graph.ordered();
-    }
-
-    public static Set<Job.Dependency> processOrder(Job.Dependency... dependencies) {
-        return processOrder(Set.of(dependencies));
-    }
-
-    static Set<Job.Dependency> build(Set<Job.Dependency> jars) {
-        var ordered = processOrder(jars);
-        //   var unavailable =  ordered.stream().filter(d -> d instanceof Dependency.Optional optional && !optional.isAvailable()).findFirst();
-        // if  (unavailable.isPresent()){
-        //   System.out.println("dependencies contain optional and unavailable "+ unavailable.get().id().shortHyphenatedName);
-        // return Set.of();
-        // }else {
-        //   System.out.println("No unavailable  dependencies ");
-        ordered.stream().filter(d -> d instanceof Job.Dependency.Buildable).map(d -> (Job.Dependency.Buildable) d).forEach(
-                Job.Dependency.Buildable::build
-        );
-        // }
-        return ordered;
-    }
-
-    static Set<Job.Dependency> clean(Set<Job.Dependency> jars) {
-        var ordered = processOrder(jars);
-        ordered.stream().filter(d -> d instanceof Job.Dependency.Buildable).map(d -> (Job.Dependency.Buildable) d).forEach(Job.Dependency.Buildable::clean);
-        return ordered;
-    }
 
 }

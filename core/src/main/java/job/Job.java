@@ -349,7 +349,13 @@ public class Job {
         }
 
         public Set<Dependency> clean(Set<Dependency> dependencies) {
-            return Dag.clean(dependencies);
+            Dag dag = new Dag(dependencies);
+            var ordered =dag.ordered();
+            ordered.stream()
+                    .filter(d -> d instanceof Job.Dependency.Buildable)
+                    .map(d -> (Job.Dependency.Buildable) d)
+                    .forEach(Job.Dependency.Buildable::clean);
+            return ordered;
         }
 
         public void clean(List<String> names) {
@@ -360,20 +366,20 @@ public class Job {
             }
         }
 
-        public Set<Dependency> build(Set<Dependency> dependencies) {
-            return Dag.build(dependencies);
-        }
-
-        public Set<Dependency> build(Dependency... dependencies) {
-            return build(Set.of(dependencies));
-        }
-
-        public Set<Dependency> build(List<String> names) {
-            if (names.isEmpty()) {
-                return build(new HashSet<>(artifacts.values()));
-            } else {
-                return build(names.stream().map(this::get).collect(Collectors.toSet()));
+        public Dag  build(Set<Dependency> dependencies) {
+            if (dependencies.isEmpty()) {
+                dependencies = this.artifacts.values().stream().collect(Collectors.toSet());
             }
+            Dag dag = new Dag(dependencies);
+            var ordered =  dag.ordered();
+            ordered.stream()
+                    .filter(d -> d instanceof Job.Dependency.Buildable)
+                    .map(d -> (Job.Dependency.Buildable) d)
+                    .forEach(Job.Dependency.Buildable::build);
+            return dag;
+        }
+        public Dag  build(Dependency ...dependencies) {
+            return build(Set.of(dependencies));
         }
     }
 
@@ -455,7 +461,8 @@ public class Job {
                             "-g",
                             "-d", classesDirName()
                     ));
-            var deps = classPath(Dag.processOrder(dependencies()));
+            Dag dag = new Dag(dependencies());
+            var deps = classPath(dag.ordered());
             if (!deps.isEmpty()) {
                 opts.addAll(List.of(
                         "--class-path=" + deps
