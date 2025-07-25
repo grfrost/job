@@ -13,6 +13,19 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class Project {
+    public Dependency.Optional isAvailable(String ...nameAndArgs) {
+        boolean isInPath = false;
+        try {
+
+            var process = new ProcessBuilder().command(nameAndArgs).start();
+            process.waitFor();
+            isInPath = (process.exitValue() == 0);
+        } catch (Exception e) {
+            // We'll take that as a no then  :)
+        }
+        return new Opt(id(nameAndArgs[0]), isInPath, Set.of());
+    }
+
     public record Id(Project project, String fullHyphenatedName, String projectRelativeHyphenatedName,
                      String shortHyphenatedName, String version,
                      Path path) {
