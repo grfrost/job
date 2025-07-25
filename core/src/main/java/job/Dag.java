@@ -32,9 +32,9 @@ public class Dag {
             DotBuilder node(String n, String label){
                 return append("\n   ").quoted(n).append("[").append("label").append("=").quoted(label).append("]").append(";");
             }
-             DotBuilder edge(String from, String to){
-                  return append("\n   ").quoted(from).append("->").quoted(to).append(";");
-             }
+            DotBuilder edge(String from, String to){
+                return append("\n   ").quoted(from).append("->").quoted(to).append(";");
+            }
         }
         Map<Job.Dependency, Set<Job.Dependency>> map = new LinkedHashMap<>();
         record Edge(Job.Dependency from, Job.Dependency to) {}
@@ -50,7 +50,6 @@ public class Dag {
         }
         public Dag(Set<Job.Dependency> deps) {
             deps.forEach(this::recurse);
-           // System.out.println(this);
         }
         public Dag(Job.Dependency ...deps) {
              this(Stream.of(deps).collect(Collectors.toSet()));
@@ -83,6 +82,37 @@ public class Dag {
             }
             return ordered;
         }
+
+    public Dag available(){
+        var ordered = this.ordered();
+        Set<Job.Dependency> unavailable = ordered.stream().filter(
+                d -> {
+                    if (d instanceof Job.Dependency.Optional opt) {
+                       return !opt.isAvailable();
+                    }else{
+                        return false;
+                    }
+                })
+                .collect(Collectors.toSet());
+
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for(Job.Dependency dep : ordered) {
+                if (!changed) {
+                    var optionalDependsOnUnavailable = dep.dependencies().stream().filter(d ->
+                            unavailable.contains(d) || d instanceof Job.Dependency.Optional o && !o.isAvailable()).findFirst();
+                    if (optionalDependsOnUnavailable.isPresent()) {
+                        changed = true;
+                        unavailable.add(dep);
+                        ordered.remove(dep);
+                        break;
+                    }
+                }
+            }
+        }
+        return new Dag(ordered);
+    }
 
 
 }

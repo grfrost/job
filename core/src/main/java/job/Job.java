@@ -348,38 +348,46 @@ public class Job {
             }
         }
 
-        public Set<Dependency> clean(Set<Dependency> dependencies) {
-            Dag dag = new Dag(dependencies);
-            var ordered =dag.ordered();
-            ordered.stream()
-                    .filter(d -> d instanceof Job.Dependency.Buildable)
-                    .map(d -> (Job.Dependency.Buildable) d)
-                    .forEach(Job.Dependency.Buildable::clean);
-            return ordered;
-        }
-
-        public void clean(List<String> names) {
-            if (names.isEmpty()) {
-                rmdir(buildPath());
-            } else {
-                clean(names.stream().map(this::get).collect(Collectors.toSet()));
-            }
-        }
-
-        public Dag  build(Set<Dependency> dependencies) {
+        public Dag clean(Set<Dependency> dependencies) {
+            boolean all = false;
             if (dependencies.isEmpty()) {
+                all = true;
                 dependencies = this.artifacts.values().stream().collect(Collectors.toSet());
             }
             Dag dag = new Dag(dependencies);
-            var ordered =  dag.ordered();
-            ordered.stream()
+            dag.ordered().stream()
+                    .filter(d -> d instanceof Job.Dependency.Buildable)
+                    .map(d -> (Job.Dependency.Buildable) d)
+                    .forEach(Job.Dependency.Buildable::clean);
+            if (all) {
+                rmdir(buildPath());
+            }
+            return dag;
+        }
+
+        public Dag clean(String... names) {
+            return clean(Set.of(names).stream().map(s->this.artifacts.get(s)).collect(Collectors.toSet()));
+        }
+        public Dag  build(Dag dag) {
+            dag.ordered().stream()
                     .filter(d -> d instanceof Job.Dependency.Buildable)
                     .map(d -> (Job.Dependency.Buildable) d)
                     .forEach(Job.Dependency.Buildable::build);
             return dag;
         }
+        public Dag  build(Set<Dependency> dependencies) {
+            if (dependencies.isEmpty()) {
+                dependencies = this.artifacts.values().stream().collect(Collectors.toSet());
+            }
+            Dag dag = new Dag(dependencies);
+            build(dag);
+           return dag;
+        }
         public Dag  build(Dependency ...dependencies) {
             return build(Set.of(dependencies));
+        }
+        public Dag  all() {
+            return new Dag(new HashSet<>(this.artifacts.values()));
         }
     }
 
