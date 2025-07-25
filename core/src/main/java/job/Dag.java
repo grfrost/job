@@ -36,10 +36,10 @@ public class Dag {
                 return append("\n   ").quoted(from).append("->").quoted(to).append(";");
             }
         }
-        Map<Job.Dependency, Set<Job.Dependency>> map = new LinkedHashMap<>();
-        record Edge(Job.Dependency from, Job.Dependency to) {}
+        Map<Dependency, Set<Dependency>> map = new LinkedHashMap<>();
+        record Edge(Dependency from, Dependency to) {}
         List<Edge> edges = new ArrayList<>();
-         public void recurse( Job.Dependency from) {
+         public void recurse( Dependency from) {
             var set = map.computeIfAbsent(from, _ -> new LinkedHashSet<>());
             var deps = from.dependencies();
             deps.forEach(dep -> {
@@ -48,10 +48,10 @@ public class Dag {
                 recurse( dep);
             });
         }
-        public Dag(Set<Job.Dependency> deps) {
+        public Dag(Set<Dependency> deps) {
             deps.forEach(this::recurse);
         }
-        public Dag(Job.Dependency ...deps) {
+        public Dag(Dependency...deps) {
              this(Stream.of(deps).collect(Collectors.toSet()));
         }
 
@@ -67,8 +67,8 @@ public class Dag {
             });
             return sb.toString();
         }
-        public Set<Job.Dependency> ordered(){
-            Set<Job.Dependency> ordered = new LinkedHashSet<>();
+        public Set<Dependency> ordered(){
+            Set<Dependency> ordered = new LinkedHashSet<>();
             while (!map.isEmpty()) {
                 var leaves = map.entrySet().stream()
                         .filter(e -> e.getValue().isEmpty())    // if this entry has zero dependencies
@@ -85,9 +85,9 @@ public class Dag {
 
     public Dag available(){
         var ordered = this.ordered();
-        Set<Job.Dependency> unavailable = ordered.stream().filter(
+        Set<Dependency> unavailable = ordered.stream().filter(
                 d -> {
-                    if (d instanceof Job.Dependency.Optional opt) {
+                    if (d instanceof Dependency.Optional opt) {
                        return !opt.isAvailable();
                     }else{
                         return false;
@@ -98,10 +98,10 @@ public class Dag {
         boolean changed = true;
         while (changed) {
             changed = false;
-            for(Job.Dependency dep : ordered) {
+            for(Dependency dep : ordered) {
                 if (!changed) {
                     var optionalDependsOnUnavailable = dep.dependencies().stream().filter(d ->
-                            unavailable.contains(d) || d instanceof Job.Dependency.Optional o && !o.isAvailable()).findFirst();
+                            unavailable.contains(d) || d instanceof Dependency.Optional o && !o.isAvailable()).findFirst();
                     if (optionalDependsOnUnavailable.isPresent()) {
                         changed = true;
                         unavailable.add(dep);
