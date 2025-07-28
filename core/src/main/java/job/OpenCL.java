@@ -69,7 +69,7 @@ public class OpenCL extends CMakeInfo implements JExtractOptProvider {
                                 )
                         );
                 opts.add("--include-dir");
-                opts.add("/usr/include/linux");
+                opts.add("\"/usr/include/linux;/usr/include\"");
                 var fwk = ((String) properties.get("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"));
                 // System.out.println("fwk = '"+fwk+"'");
                 opts.addAll(
