@@ -4,8 +4,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 interface JExtractOptProvider {
-    List<String> jExtractOpts();
-
-    default void writeCompilerFlags(Path outputDir) {
-    } // hack for mac
+    void jExtractOpts(List<String> opts);
+     void writeCompilerFlags(Path outputDir);
 }

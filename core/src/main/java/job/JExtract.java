@@ -33,28 +33,25 @@ public class JExtract extends Jar {
                     "--target-package", id().shortHyphenatedName(),
                     "--output", javaSourcePath().toString()
             ));
-            List<String> providerOpts = new ArrayList<>(List.of());
             if (optProvider != null) {
-                var optProviderOpts = optProvider.jExtractOpts();
-                providerOpts.addAll(optProviderOpts);
+                optProvider.jExtractOpts(opts);
+                optProvider.writeCompilerFlags(id().project().rootPath()); // hack for jextract22 on mac
+            }else{
+                throw new IllegalStateException("How did we get here without a jextract provider in the dependency graph");
             }
-            opts.addAll(providerOpts);
-            optProvider.writeCompilerFlags(id().project().rootPath());
+
             boolean success;
             id().project().reporter.command(this, String.join(" ", opts));
             System.out.println(String.join(" ", opts));
             id().project().reporter.progress(this, "extracting");
             try {
-                var process = new ProcessBuilder()
-                        .command(opts)
-                        .redirectErrorStream(true)
-                        .start();
-                process.waitFor();
+                var process = new ProcessBuilder().command(opts).redirectErrorStream(true).start();
                 new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
                         .forEach(s -> {
                             id().project().reporter.warning(this, s);
                             System.err.println(s);
                         });
+                process.waitFor();
                 success = (process.exitValue() == 0);
                 if (!success) {
                     id().project().reporter.error(this, "error " + process.exitValue());

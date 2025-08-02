@@ -1,11 +1,11 @@
 package job;
 
+import java.util.List;
 import java.util.Set;
 
 public class Cuda extends CMakeInfo {
     public Cuda(Project.Id id, Set<Dependency> buildDependencies) {
         super(id, "CUDAToolkit", "CUDATOOLKIT_FOUND", Set.of(
-                "CUDATOOLKIT_FOUND",
                 "CUDA_OpenCL_LIBRARY",
                 "CUDA_cuFile_LIBRARY",
                 "CUDA_cuda_driver_LIBRARY",
@@ -14,11 +14,12 @@ public class Cuda extends CMakeInfo {
                 "CUDAToolkit_INCLUDE_DIRS",
                 "CUDAToolkit_NVCC_EXECUTABLE",
                 "CUDAToolkit_LIBRARY_DIR",
-                "CUDAToolkit_Version",
-                "CMAKE_HOST_SYSTEM_NAME",
-                "CMAKE_HOST_SYSTEM_PROCESSOR",
-                "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"
-
+                "CUDAToolkit_Version"
         ), buildDependencies);
+    }
+
+    @Override
+    public void jExtractOpts(List<String> opts) {
+
     }
 }

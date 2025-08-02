@@ -6,13 +6,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public abstract class CMakeInfo extends CMake implements Dependency.Optional {
+public abstract class CMakeInfo extends CMake implements Dependency.Optional, JExtractOptProvider {
 
     Path asPath(String key) {
         return properties.containsKey(key) ? Path.of((String) properties.get(key)) : null;
@@ -44,15 +45,26 @@ public abstract class CMakeInfo extends CMake implements Dependency.Optional {
     final Set<String> vars;
     Properties properties = new Properties();
     final Path propertiesPath;
-
+    final String sysName;
+    final String fwk;
+    final boolean darwin;
+    final boolean linux;
     final Map<String, String> otherVarMap = new LinkedHashMap<>();
     final boolean available;
 
-    CMakeInfo(Project.Id id, String find, String response, Set<String> vars, Set<Dependency> buildDependencies) {
+    CMakeInfo(Project.Id id, String find, String response, Set<String> varsIn, Set<Dependency> buildDependencies) {
         super(id, id.project().confPath().resolve("cmake-info").resolve(find), buildDependencies);
         this.find = find;
         this.response = response;
-        this.vars = vars;
+
+        this.vars = new LinkedHashSet<>(Set.of(
+                "CMAKE_HOST_SYSTEM_NAME",
+                "CMAKE_HOST_SYSTEM_PROCESSOR",
+                "CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES",
+                response
+        ));
+        this.vars.addAll(varsIn);
+
         this.text = template.replaceAll("__find__", find).replaceAll("__response__", response);
         this.propertiesPath = cmakeSourceDir().resolve("properties");
         if (Files.exists(propertiesPath)) {
@@ -70,7 +82,7 @@ public abstract class CMakeInfo extends CMake implements Dependency.Optional {
                 cmakeInit((line) -> {
                     if (p.matcher(line) instanceof Matcher matcher && matcher.matches()) {
                         //   System.out.println("GOT "+matcher.group(1)+"->"+matcher.group(2));
-                        if (vars.contains(matcher.group(1))) {
+                        if (this.vars.contains(matcher.group(1))) {
                             properties.put(matcher.group(1), matcher.group(2));
                         } else {
                             otherVarMap.put(matcher.group(1), matcher.group(2));
@@ -85,8 +97,23 @@ public abstract class CMakeInfo extends CMake implements Dependency.Optional {
             }
         }
         available = asBoolean(response);
+        sysName = asString("CMAKE_HOST_SYSTEM_NAME");
+        darwin = sysName.equals("Darwin");
+        linux = sysName.equals("Linux");
+        fwk = darwin?asString("CMAKE_C_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES"):null;
     }
 
+    @Override
+    public void writeCompilerFlags(Path outputDir) {
+        if (darwin) {
+            try {
+                Path compileFLags = outputDir.resolve("compile_flags.txt");
+                Files.writeString(compileFLags, "-F" + fwk + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE);
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
     @Override
     public boolean isAvailable() {
         return available;

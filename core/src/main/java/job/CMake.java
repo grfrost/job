@@ -26,12 +26,13 @@ public class CMake extends DependencyImpl<CMake> implements Dependency.Buildable
                     .command(opts)
                     .redirectErrorStream(true)
                     .start();
-            process.waitFor();
+
             new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
                     .forEach(line -> {
                         lineConsumer.accept(line);
                         id().project().reporter.info(this, line);
                     });
+            process.waitFor();
             success = (process.exitValue() == 0);
 
             if (!success) {

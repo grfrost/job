@@ -8,7 +8,9 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -272,6 +274,11 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
         id().project().reporter.progress(this, "running");
         try {
             var process = new ProcessBuilder().directory(id().project().rootPath().toFile()).redirectErrorStream(true).command(opts).start();
+            new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
+                    .forEach(s -> {
+                        id().project().reporter.warning(this, s);
+                        System.err.println(s);
+                    });
             process.waitFor();
             if (process.exitValue() != 0) {
                 System.out.println("Java failed to execute, is a valid java in your path ? " + id().fullHyphenatedName());
