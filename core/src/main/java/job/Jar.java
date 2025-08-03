@@ -242,7 +242,8 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
     }
 
     @Override
-    public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> args) {
+    public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> vmOpts,  List<String> args) {
+        System.out.println("vmOpts = "+String.join(" ", vmOpts));
         ForkExec.Opts opts = ForkExec.Opts.of(ProcessHandle.current()
                 .info()
                 .command()
@@ -250,14 +251,13 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
                 "--enable-preview",
                 "--enable-native-access=ALL-UNNAMED"
         );
-        // FIX this we need top pass opts to run!
-        if (id().shortHyphenatedName().equals("nbody") && System.getProperty("os.name").toLowerCase().contains("mac")) {
-            opts.add("-XstartOnFirstThread");
-        }
         opts.add(
                 "--add-exports=jdk.incubator.code/jdk.incubator.code.dialect.java.impl=ALL-UNNAMED", // for OpRenderer
                 "--class-path", classPathWithThisLast(depsInOrder),
-                "-Djava.library.path=" + id().project().buildPath(),
+                "-Djava.library.path=" + id().project().buildPath()
+        );
+        vmOpts.forEach(opts::add);
+        opts.add(
                 mainClassName
         );
         args.forEach(opts::add);

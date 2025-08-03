@@ -24,7 +24,7 @@ public interface Dependency {
     }
 
     interface ExecutableJar extends Executable {
-        boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> args);
+        boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> vmOpts, List<String> args);
     }
 
     interface Runnable extends Executable {
