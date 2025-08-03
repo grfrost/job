@@ -1,6 +1,5 @@
 package job;
 
-import java.util.List;
 import java.util.Set;
 
 public class Cuda extends CMakeInfo {
@@ -19,7 +18,7 @@ public class Cuda extends CMakeInfo {
     }
 
     @Override
-    public void jExtractOpts(List<String> opts) {
+    public void jExtractOpts(ForkExec.Opts opts) {
 
     }
 }

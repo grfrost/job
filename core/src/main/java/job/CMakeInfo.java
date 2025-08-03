@@ -5,8 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -26,7 +28,9 @@ public abstract class CMakeInfo extends CMake implements Dependency.Optional, JE
     String asString(String key) {
         return (properties.containsKey(key) && properties.get(key) instanceof String s) ? s : null;
     }
-
+    List<String> asSemiSeparatedStringList(String key) {
+        return Arrays.stream(asString(key).split(";")).toList();
+    }
 
     final String find;
     final String response;

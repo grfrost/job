@@ -8,9 +8,7 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -245,47 +243,36 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
 
     @Override
     public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> args) {
-
-        List<String> opts = new ArrayList<>();
         String javaExecutablePath = ProcessHandle.current()
                 .info()
                 .command()
                 .orElseThrow();
         System.out.println("Using Java executable: " + javaExecutablePath);
-        opts.addAll(List.of(
-                javaExecutablePath,
+        ForkExec.Opts opts = ForkExec.Opts.of(javaExecutablePath).add(
                 "--enable-preview",
-                "--enable-native-access=ALL-UNNAMED"));
+                "--enable-native-access=ALL-UNNAMED"
+        );
         // FIX this we need top pass opts to run!
         if (id().shortHyphenatedName().equals("nbody") && System.getProperty("os.name").toLowerCase().contains("mac")) {
-            opts.addAll(List.of(
-                    "-XstartOnFirstThread"
-            ));
+            opts.add("-XstartOnFirstThread");
         }
-        opts.addAll(List.of(
+        opts.add(
                 "--add-exports=jdk.incubator.code/jdk.incubator.code.dialect.java.impl=ALL-UNNAMED", // for OpRenderer
                 "--class-path", classPathWithThisLast(depsInOrder),
                 "-Djava.library.path=" + id().project().buildPath(),
                 mainClassName
-        ));
-        opts.addAll(args);
-        id().project().reporter.command(this, String.join(" ", opts));
-        System.out.println(String.join(" ", opts));
+        );
+        args.forEach(opts::add);
+        id().project().reporter.command(this, opts.toString());
+        System.out.println(String.join(" ", opts.toString()));
         id().project().reporter.progress(this, "running");
-        try {
-            var process = new ProcessBuilder().directory(id().project().rootPath().toFile()).redirectErrorStream(true).command(opts).start();
-            new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
-                    .forEach(s -> {
-                        id().project().reporter.warning(this, s);
-                        System.err.println(s);
-                    });
-            process.waitFor();
-            if (process.exitValue() != 0) {
+        var result = ForkExec.forkExec(this, id().project().rootPath(), opts);
+        result.stdErrAndOut().forEach((line)->{
+            id().project().reporter.warning(this, line);
+        });
+            if (result.status()!=0) {
                 System.out.println("Java failed to execute, is a valid java in your path ? " + id().fullHyphenatedName());
             }
-            return process.exitValue() == 0;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+            return result.status()==0;
     }
 }

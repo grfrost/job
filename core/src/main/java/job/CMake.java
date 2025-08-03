@@ -1,48 +1,28 @@
 package job;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
 public class CMake extends DependencyImpl<CMake> implements Dependency.Buildable, Dependency.WithPath {
+    public ForkExec.Result cmake(Consumer<String> lineConsumer, List<String> tailopts) {
+        ForkExec.Opts opts = ForkExec.Opts.of("cmake");
+        tailopts.forEach(opts::add);
+        id.project().reporter.command(this, opts.toString());
+        id.project().reporter.progress(this, opts.toString());
+        var result =  ForkExec.forkExec(this, id.project().rootPath(), opts);
+        result.stdErrAndOut().forEach((line) -> {
+            lineConsumer.accept(line);
+            id().project().reporter.info(this, line);
+        });
 
-
-
-    public boolean cmake(Consumer<String> lineConsumer, List<String> tailopts) {
-        List<String> opts = new ArrayList<>();
-        opts.add("cmake");
-        opts.addAll(tailopts);
-        boolean success;
-
-        id.project().reporter.command(this, String.join(" ", opts));
-        id.project().reporter.progress(this, "cmake " + tailopts.getFirst());
-        try {
-            var process = new ProcessBuilder()
-                    .command(opts)
-                    .redirectErrorStream(true)
-                    .start();
-
-            new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
-                    .forEach(line -> {
-                        lineConsumer.accept(line);
-                        id().project().reporter.info(this, line);
-                    });
-            process.waitFor();
-            success = (process.exitValue() == 0);
-
-            if (!success) {
-                id().project().reporter.error(this, String.join(" ", opts));
-                throw new RuntimeException("CMake failed");
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
+        if (result.status()!=0){
+            id().project().reporter.error(this, opts.toString());
+            throw new RuntimeException("CMake failed");
         }
-        return success;
+        return result;
     }
 
     @Override
@@ -50,23 +30,23 @@ public class CMake extends DependencyImpl<CMake> implements Dependency.Buildable
         throw new IllegalStateException("who called me");
     }
 
-    boolean cmake(Consumer<String> lineConsumer, String... opts) {
+    ForkExec.Result cmake(Consumer<String> lineConsumer, String... opts) {
         return cmake(lineConsumer, List.of(opts));
     }
 
-    public boolean cmakeInit(Consumer<String> lineConsumer) {
+    public ForkExec.Result cmakeInit(Consumer<String> lineConsumer) {
         return cmake(lineConsumer, "--fresh", "-DHAT_TARGET=" + id().project().buildPath(), "-B", cmakeBuildDir().toString(), "-S", cmakeSourceDir().toString());
     }
 
-    public boolean cmakeBuildTarget(Consumer<String> lineConsumer, String target) {
+    public ForkExec.Result cmakeBuildTarget(Consumer<String> lineConsumer, String target) {
         return cmake(lineConsumer, "--build", cmakeBuildDir().toString(), "--target", target);
     }
 
-    public boolean cmakeBuild(Consumer<String> lineConsumer) {
+    public ForkExec.Result cmakeBuild(Consumer<String> lineConsumer) {
         return cmake(lineConsumer, "--build", cmakeBuildDir().toString());
     }
 
-    public boolean cmakeClean(Consumer<String> lineConsumer) {
+    public ForkExec.Result cmakeClean(Consumer<String> lineConsumer) {
         return cmakeBuildTarget(lineConsumer, "clean");
     }
 

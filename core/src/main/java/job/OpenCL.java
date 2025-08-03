@@ -1,7 +1,5 @@
 package job;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 public class OpenCL extends CMakeInfo {
@@ -16,20 +14,21 @@ public class OpenCL extends CMakeInfo {
     }
 
     @Override
-    public void jExtractOpts(List<String> opts) {
+    public void jExtractOpts(ForkExec.Opts opts) {
         if (isAvailable()) {
             if (darwin) {
-                opts.addAll(List.of(
+                opts.add(
                         "--library", ":/System/Library/Frameworks/OpenCL.framework/OpenCL",
-                        "--header-class-name", "opencl_h", fwk + "/OpenCL.framework/Headers/opencl.h"
-                ));
+                        "--header-class-name", "opencl_h",
+                        fwk + "/OpenCL.framework/Headers/opencl.h"
+                );
             } else if (linux) {
-                opts.addAll(List.of(
+                opts.add(
                         "--library", asString("OpenCL_LIBRARY"),
                         "--include-dir","\"/usr/include/linux;/usr/include\"",
                         "--header-class-name", "opencl_h",
                         asString("OpenCL_INCLUDE_DIRS") + "/CL/opencl.h"
-                ));
+                );
             }
         }
     }

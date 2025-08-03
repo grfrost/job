@@ -1,10 +1,6 @@
 package job;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 public class JExtract extends Jar {
@@ -27,48 +23,28 @@ public class JExtract extends Jar {
     public boolean build() {
         try {
             id.project().mkdir(javaSourcePath());
-            List<String> opts = new ArrayList<>(List.of());
-            opts.addAll(List.of(
-                    "jextract",
+            var opts = ForkExec.Opts.of("jextract").add(
                     "--target-package", id().shortHyphenatedName(),
                     "--output", javaSourcePath().toString()
-            ));
-            if (optProvider != null) {
-                optProvider.jExtractOpts(opts);
-                optProvider.writeCompilerFlags(id().project().rootPath()); // hack for jextract22 on mac
-            }else{
-                throw new IllegalStateException("How did we get here without a jextract provider in the dependency graph");
-            }
-
-            boolean success;
-            id().project().reporter.command(this, String.join(" ", opts));
-            System.out.println(String.join(" ", opts));
+            );
+            optProvider.jExtractOpts(opts);
+            optProvider.writeCompilerFlags(id().project().rootPath());
+            id().project().reporter.command(this, opts.toString());
+            System.out.println(String.join(" ", opts.toString()));
             id().project().reporter.progress(this, "extracting");
-            try {
-                var process = new ProcessBuilder().command(opts).redirectErrorStream(true).start();
-                new BufferedReader(new InputStreamReader(process.getInputStream())).lines()
-                        .forEach(s -> {
-                            id().project().reporter.warning(this, s);
-                            System.err.println(s);
-                        });
-                process.waitFor();
-                success = (process.exitValue() == 0);
-                if (!success) {
-                    id().project().reporter.error(this, "error " + process.exitValue());
-                }
-            } catch (Exception e) {
-                throw new IllegalStateException(e);
-            }
+            var result= ForkExec.forkExec(this, id.project().rootPath(),opts);
+            result.stdErrAndOut().forEach((line)->{
+                id().project().reporter.warning(this, line);
+            });
             super.build();
+            return result.status()==0;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
-        return false;
     }
 
     @Override
     public boolean clean() {
-        // No opp
         return false;
     }
 
