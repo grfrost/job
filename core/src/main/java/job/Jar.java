@@ -243,12 +243,10 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
 
     @Override
     public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> args) {
-        String javaExecutablePath = ProcessHandle.current()
+        ForkExec.Opts opts = ForkExec.Opts.of(ProcessHandle.current()
                 .info()
                 .command()
-                .orElseThrow();
-        System.out.println("Using Java executable: " + javaExecutablePath);
-        ForkExec.Opts opts = ForkExec.Opts.of(javaExecutablePath).add(
+                .orElseThrow()).add(
                 "--enable-preview",
                 "--enable-native-access=ALL-UNNAMED"
         );
