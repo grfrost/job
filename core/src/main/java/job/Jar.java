@@ -242,8 +242,7 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
     }
 
     @Override
-    public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> vmOpts,  List<String> args) {
-        System.out.println("vmOpts = "+String.join(" ", vmOpts));
+    public boolean run(String mainClassName, Set<Dependency> depsInOrder, List<String> vmOpts, List<String> args) {
         ForkExec.Opts opts = ForkExec.Opts.of(ProcessHandle.current()
                 .info()
                 .command()
@@ -265,12 +264,12 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
         System.out.println(String.join(" ", opts.toString()));
         id().project().reporter.progress(this, "running");
         var result = ForkExec.forkExec(this, id().project().rootPath(), opts);
-        result.stdErrAndOut().forEach((line)->{
+        result.stdErrAndOut().forEach((line) -> {
             id().project().reporter.warning(this, line);
         });
-            if (result.status()!=0) {
-                System.out.println("Java failed to execute, is a valid java in your path ? " + id().fullHyphenatedName());
-            }
-            return result.status()==0;
+        if (result.status() != 0) {
+            System.out.println("Java failed to execute, is a valid java in your path ? " + id().fullHyphenatedName());
+        }
+        return result.status() == 0;
     }
 }
