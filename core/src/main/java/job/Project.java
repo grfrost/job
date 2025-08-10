@@ -3,12 +3,14 @@ package job;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -26,16 +28,62 @@ public class Project {
         return new Opt(id(nameAndArgs[0]), isInPath, Set.of());
     }
 
-    public record Id(Project project, String fullHyphenatedName, String projectRelativeHyphenatedName,
+    public Path dir(String s) {
+        return rootPath().resolve(s);
+    }
+
+    enum IdType {Unknown, CMakeAndJar, Jar,CMake,CMakeInfo,JExtract,Custom}
+
+    public record Id(Project project, IdType type, String fullHyphenatedName, String projectRelativeHyphenatedName,
                      String shortHyphenatedName, String version,
                      Path path) {
         String str() {
             return project.name() + " " + fullHyphenatedName + " " + projectRelativeHyphenatedName + " " + shortHyphenatedName + " " + version + " " + (path == null ? "null" : path);
         }
 
-        static Id of(Project project, String projectRelativeHyphenatedName, String shortHyphenatedName, String version, Path path) {
-            return new Id(project, project.name() + "-" + projectRelativeHyphenatedName + "-" + version, projectRelativeHyphenatedName, shortHyphenatedName, version, path);
+        static Id of(Project project, IdType idType, String projectRelativeHyphenatedName, String shortHyphenatedName, String version, Path path) {
+            return new Id(project, idType,project.name() + "-" + projectRelativeHyphenatedName + "-" + version, projectRelativeHyphenatedName, shortHyphenatedName, version, path);
         }
+    }
+
+    static Id id(Project project, String projectRelativeHyphenatedName, Path path) {
+
+        if (projectRelativeHyphenatedName == null || projectRelativeHyphenatedName.isEmpty()) {
+            throw new IllegalArgumentException("projectRelativeHyphenatedName cannot be null or empty yet");
+        }
+        var version = "1.0";
+        if (!Files.isDirectory(path)) {
+            throw new IllegalArgumentException("path "+path+" must be a directory");
+        }
+        int lastIndex = projectRelativeHyphenatedName.lastIndexOf('-');
+        String[] names;
+        if (Pattern.matches("\\d+.\\d+", projectRelativeHyphenatedName.substring(lastIndex + 1))) {
+            version = projectRelativeHyphenatedName.substring(lastIndex + 1);
+            names = projectRelativeHyphenatedName.substring(0, lastIndex).split("-");
+        } else {
+            names = projectRelativeHyphenatedName.split("-");
+        }
+        var tailNames = Arrays.copyOfRange(names, 1, names.length); // [] -> [....]
+        var shortHyphenatedName = projectRelativeHyphenatedName;
+        if (tailNames.length == 1) {
+             shortHyphenatedName = tailNames[0];
+        } else {
+            var midNames = Arrays.copyOfRange(tailNames, 0, tailNames.length);
+            shortHyphenatedName = String.join("-", midNames);
+        }
+
+        IdType idType=IdType.Custom;
+        if (Files.isDirectory(path.resolve("src/main/java"))){
+            if (Files.isDirectory(path.resolve("src/main/native")) && Files.isRegularFile(path.resolve("CMakeLists.txt"))){
+                idType=IdType.CMakeAndJar;
+            }else{
+                idType=IdType.Jar;
+            }
+        }else  if (Files.isRegularFile(path.resolve("CMakeLists.txt"))){
+            idType=IdType.CMake;
+        }
+
+        return Id.of(project, idType,projectRelativeHyphenatedName, shortHyphenatedName, version, path);
     }
 
     static Id id(Project project, String projectRelativeHyphenatedName) {
@@ -66,7 +114,7 @@ public class Project {
                     mac  ->                mac                        mac                    null
                  */
             var shortHyphenatedName = projectRelativeHyphenatedName;
-            id = Id.of(project, projectRelativeHyphenatedName, shortHyphenatedName, version, realPossiblyPuralizedPath);
+            id = Id.of(project, IdType.Unknown,  projectRelativeHyphenatedName, shortHyphenatedName, version, realPossiblyPuralizedPath);
         } else {
                 /* we have one or more names
                                            hyphenated                 shortHyphernated       path
@@ -80,11 +128,11 @@ public class Project {
             } else {
                 if (tailNames.length == 1) {
                     var shortHyphenatedName = tailNames[0];
-                    id = Id.of(project, projectRelativeHyphenatedName, shortHyphenatedName, version, expectedPath);
+                    id = Id.of(project, IdType.Unknown,projectRelativeHyphenatedName, shortHyphenatedName, version, expectedPath);
                 } else {
                     var midNames = Arrays.copyOfRange(tailNames, 0, tailNames.length);
                     var shortHyphenatedName = String.join("-", midNames);
-                    id = Id.of(project, projectRelativeHyphenatedName, shortHyphenatedName, version, expectedPath);
+                    id = Id.of(project, IdType.Unknown,projectRelativeHyphenatedName, shortHyphenatedName, version, expectedPath);
                 }
             }
         }
@@ -92,7 +140,30 @@ public class Project {
     }
 
     public Id id(String id) {
+        Pattern p = Pattern.compile("(.*)\\{([a-zA-Z0-9]+)(\\|[a-zA-Z0-9]+)?}(.*)");
+
+        // ok lets transform the id into a project relative path
+        // for example "backend{s}-ffi" -> id ="backend-ffi"  path="${project}/backends/ffi"
+        if (p.matcher(id) instanceof Matcher m && m.matches() && m.groupCount() == 4) {
+            id = m.group(1)+(m.group(3)==null?"":m.group(3).substring(1))+m.group(4);  // we dropped the {} and its content
+            var pathName = m.group(1)+m.group(2)+m.group(4);// we included the {} content (dropped the actual braces)
+            Path path =  this.rootPath.resolve(pathName.replace('-','/'));
+            if (Files.isDirectory(path)) {
+                System.out.println("Id '"+id+"'->  path '"+path+"'");
+                return id(id, path);
+            }else{
+                throw new IllegalArgumentException("Id '"+id+"' contains a path substitution but resulting path '"+path+"' does not exist");
+            }
+        }
+        Path path = this.rootPath.resolve(this.rootPath.resolve(id.replace('-','/')));
+        if (Files.isDirectory(path)) {
+            System.out.println("Id '"+id+"'->  path '"+path+"' (No substitution)");
+            return  id(id, this.rootPath.resolve(path.toString()));
+        }
         return id(this, id);
+    }
+    public Id id(String id, Path path) {
+        return id(this, id, path);
     }
 
 

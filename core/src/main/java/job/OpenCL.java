@@ -12,6 +12,9 @@ public class OpenCL extends CMakeInfo {
                 "OpenCL_VERSION_STRING"
         ), buildDependencies);
     }
+    public OpenCL(Project.Id id, Dependency ...dependencies) {
+        this(id,Set.of(dependencies));
+    }
 
     @Override
     public void jExtractOpts(ForkExec.Opts opts) {

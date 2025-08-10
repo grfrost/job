@@ -9,6 +9,10 @@ public class Opt extends DependencyImpl<Opt> implements Dependency.Optional {
         super(id, buildDependencies);
         this.available = available;
     }
+    public Opt(Project.Id id, boolean available, Dependency ... dependencies) {
+        super(id, Set.of(dependencies));
+        this.available = available;
+    }
 
     @Override
     public boolean isAvailable() {

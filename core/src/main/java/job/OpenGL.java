@@ -17,7 +17,9 @@ public class OpenGL extends CMakeInfo {
                 "OPENGL_LIBRARY"
 
         ), buildDependencies);
-     //   glLibrary = asPath("OpenGL_glu_Library");
+    }
+    public OpenGL(Project.Id id, Dependency ...dependencies) {
+        this(id, Set.of(dependencies));
     }
 
     @Override
