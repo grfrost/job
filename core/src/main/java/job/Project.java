@@ -149,7 +149,7 @@ public class Project {
             var pathName = m.group(1)+m.group(2)+m.group(4);// we included the {} content (dropped the actual braces)
             Path path =  this.rootPath.resolve(pathName.replace('-','/'));
             if (Files.isDirectory(path)) {
-                System.out.println("Id '"+id+"'->  path '"+path+"'");
+                //System.out.println("Id '"+id+"'->  path '"+path+"'");
                 return id(id, path);
             }else{
                 throw new IllegalArgumentException("Id '"+id+"' contains a path substitution but resulting path '"+path+"' does not exist");
@@ -157,7 +157,7 @@ public class Project {
         }
         Path path = this.rootPath.resolve(this.rootPath.resolve(id.replace('-','/')));
         if (Files.isDirectory(path)) {
-            System.out.println("Id '"+id+"'->  path '"+path+"' (No substitution)");
+            //System.out.println("Id '"+id+"'->  path '"+path+"' (No substitution)");
             return  id(id, this.rootPath.resolve(path.toString()));
         }
         return id(this, id);
