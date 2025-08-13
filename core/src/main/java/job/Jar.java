@@ -17,8 +17,10 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 
 public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, Dependency.WithPath, Dependency.ExecutableJar {
@@ -152,9 +154,13 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
                 if (Files.exists(javaResourcePath())) {
                     dirsToJar.add(javaResourcePath());
                 }
-                var jarStream = new JarOutputStream(Files.newOutputStream(jarFile()));
 
-
+                Manifest manifest = new Manifest();
+                Attributes mainAttributes = manifest.getMainAttributes();
+                mainAttributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
+               // mainAttributes.put(Attributes.Name.MAIN_CLASS,   id().shortHyphenatedName()+".Main");
+                mainAttributes.put(Attributes.Name.IMPLEMENTATION_VENDOR, "HAT's Java Opinionated Builder (JOB)");
+                var jarStream = new JarOutputStream(Files.newOutputStream(jarFile()), manifest);
                 record RootAndPath(Path root, Path path) {
                 }
                 id().project().reporter.command(this, "jar cvf " + jarFile() + " " +
