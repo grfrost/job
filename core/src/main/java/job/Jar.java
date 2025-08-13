@@ -159,7 +159,7 @@ public class Jar extends DependencyImpl<Jar> implements Dependency.Buildable, De
                 Attributes mainAttributes = manifest.getMainAttributes();
                 mainAttributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
                // mainAttributes.put(Attributes.Name.MAIN_CLASS,   id().shortHyphenatedName()+".Main");
-                mainAttributes.put(Attributes.Name.IMPLEMENTATION_VENDOR, "HAT's Java Opinionated Builder (JOB)");
+               // mainAttributes.put(Attributes.Name.IMPLEMENTATION_VENDOR, "HAT's Java Opinionated Builder (JOB)");
                 var jarStream = new JarOutputStream(Files.newOutputStream(jarFile()), manifest);
                 record RootAndPath(Path root, Path path) {
                 }
